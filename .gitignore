@@ -1,0 +1,28 @@
+## .NET / ASP.NET Core
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.vscode/
+
+## Secrets / Environment-specific config
+appsettings.Development.json
+appsettings.*.json
+!appsettings.json
+
+## macOS
+.DS_Store
+.AppleDouble
+.LSOverrideIcon
+
+## Claude Code internal files
+.claude/
+
+## Logs
+logs/
+*.log
+
+## Temp / Published output
+publish/
+out/

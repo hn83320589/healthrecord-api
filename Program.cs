@@ -25,6 +25,14 @@ try
         .WriteTo.Console()
         .Enrich.FromLogContext());
 
+    builder.Services.AddCors(options =>
+  {
+      options.AddPolicy("Dev", policy =>
+          policy.WithOrigins("http://localhost:5174")
+                .AllowAnyHeader()
+                .AllowAnyMethod());
+  });
+
     // Database
     var connStr = builder.Configuration.GetConnectionString("DefaultConnection")!;
     builder.Services.AddDbContext<AppDbContext>(options =>
@@ -85,6 +93,8 @@ try
         app.UseSwagger();
         app.UseSwaggerUI();
     }
+
+    app.UseCors("Dev");
 
     app.UseSerilogRequestLogging();
     app.UseAuthentication();

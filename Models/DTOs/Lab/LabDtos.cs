@@ -14,7 +14,6 @@ public record LabResultResponse(
     decimal? ValueNumeric,
     string? ValueText,
     bool IsAbnormal,
-    string? NhiCode,
     string Source,
     string? Note,
     DateTime CreatedAt);

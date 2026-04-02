@@ -1,5 +1,4 @@
 using System.Text.Json;
-using HealthRecord.API.Common.Constants;
 using HealthRecord.API.Common.Helpers;
 using HealthRecord.API.Infrastructure.Data;
 using HealthRecord.API.Models.DTOs.Nhi;
@@ -66,7 +65,12 @@ public class NhiImportService(AppDbContext db) : INhiImportService
             db.NhiImportLogs.Add(log);
             await db.SaveChangesAsync();
 
-            int healthRecordCount = 0, medCount = 0, labCount = 0, skippedLabs = 0;
+            // Pre-load existing UserLabItems for O(1) lookup during lab processing
+            var userItemDict = await db.UserLabItems
+                .Where(i => i.UserId == userId)
+                .ToDictionaryAsync(i => (i.ItemCode, i.ItemName));
+
+            int healthRecordCount = 0, medCount = 0, labCount = 0, newItemCount = 0;
 
             // r1 → HealthRecords, r1_1 → MedicationDetails
             foreach (var visit in visitGroups)
@@ -111,7 +115,7 @@ public class NhiImportService(AppDbContext db) : INhiImportService
                 }
             }
 
-            // r7 → LabResultDetails (match against LabItemPresets)
+            // r7 → LabResultDetails (match against UserLabItems, auto-create if missing)
             // HealthRecords are already in Local cache — no extra DB round trip needed
             foreach (var labGroup in labGroups)
             {
@@ -124,14 +128,32 @@ public class NhiImportService(AppDbContext db) : INhiImportService
 
                 foreach (var item in labGroup.Items)
                 {
-                    var preset = LabItemPresets.FindByNhiCode(item.NhiCode, item.NhiItemName);
-                    if (preset == null)
+                    if (string.IsNullOrEmpty(item.NhiCode)) continue;
+
+                    var itemCode = item.NhiCode!;
+                    var itemName = item.NhiItemName ?? "";
+                    var key = (itemCode, itemName);
+
+                    if (!userItemDict.TryGetValue(key, out var userItem))
                     {
-                        skippedLabs++;
-                        continue;
+                        userItem = new UserLabItem
+                        {
+                            UserId = userId,
+                            ItemCode = itemCode,
+                            ItemName = itemName,
+                            Unit = "",
+                            Category = "其他",
+                            IsPreset = false,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow,
+                        };
+                        db.UserLabItems.Add(userItem);
+                        await db.SaveChangesAsync();
+                        userItemDict[key] = userItem;
+                        newItemCount++;
                     }
 
-                    var isAbnormal = DetermineAbnormal(item.NumericValue, preset.NormalMin, preset.NormalMax);
+                    var isAbnormal = DetermineAbnormal(item.NumericValue, userItem.NormalMin, userItem.NormalMax);
 
                     db.LabResultDetails.Add(new LabResultDetail
                     {
@@ -139,18 +161,16 @@ public class NhiImportService(AppDbContext db) : INhiImportService
                         HealthRecordId = matchedRecord?.Id,
                         NhiImportLogId = log.Id,
                         RecordedAt = labGroup.VisitDate,
-                        ItemName = preset.ItemName,
-                        ItemCode = preset.ItemCode,
-                        Unit = preset.Unit,
-                        Category = preset.Category,
-                        NormalMin = preset.NormalMin,
-                        NormalMax = preset.NormalMax,
+                        ItemCode = userItem.ItemCode,
+                        ItemName = userItem.ItemName,
+                        Unit = userItem.Unit,
+                        Category = userItem.Category,
+                        NormalMin = userItem.NormalMin,
+                        NormalMax = userItem.NormalMax,
                         IsNumeric = item.IsNumeric,
                         ValueNumeric = item.NumericValue,
                         ValueText = item.IsNumeric ? null : item.RawValue,
                         IsAbnormal = isAbnormal,
-                        NhiCode = item.NhiCode,
-                        NhiItemName = item.NhiItemName,
                         NhiRawValue = item.RawValue,
                         NhiRawRange = item.RawRange,
                         Source = "nhi_import",
@@ -163,14 +183,14 @@ public class NhiImportService(AppDbContext db) : INhiImportService
             log.HealthRecordCount = healthRecordCount;
             log.MedicationCount = medCount;
             log.LabCount = labCount;
-            log.SkippedLabs = skippedLabs;
+            log.SkippedLabs = 0;
             await db.SaveChangesAsync();
 
             await transaction.CommitAsync();
 
             return new NhiImportResponse(log.Id, log.ImportedAt, log.DataDate,
                 log.DateRangeStart, log.DateRangeEnd,
-                healthRecordCount, medCount, labCount, skippedLabs);
+                healthRecordCount, medCount, labCount, 0, newItemCount);
         }
         catch
         {

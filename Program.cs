@@ -71,6 +71,7 @@ try
     builder.Services.AddScoped<IHealthRecordService, HealthRecordService>();
     builder.Services.AddScoped<IMedicationService, MedicationService>();
     builder.Services.AddScoped<INhiImportService, NhiImportService>();
+    builder.Services.AddScoped<IUserLabItemService, UserLabItemService>();
 
     // Swagger (dev only)
     builder.Services.AddEndpointsApiExplorer();

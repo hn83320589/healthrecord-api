@@ -24,4 +24,5 @@ public class User
     public ICollection<LabResultDetail> LabResults { get; set; } = [];
     public ICollection<MedicationDetail> Medications { get; set; } = [];
     public ICollection<NhiImportLog> NhiImportLogs { get; set; } = [];
+    public ICollection<UserLabItem> UserLabItems { get; set; } = [];
 }

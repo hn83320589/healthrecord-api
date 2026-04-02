@@ -17,7 +17,7 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.0")
+                .HasAnnotation("ProductVersion", "9.0.3")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
@@ -206,14 +206,8 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasColumnType("longtext");
 
-                    b.Property<string>("NhiCode")
-                        .HasColumnType("varchar(255)");
-
                     b.Property<int?>("NhiImportLogId")
                         .HasColumnType("int");
-
-                    b.Property<string>("NhiItemName")
-                        .HasColumnType("varchar(255)");
 
                     b.Property<string>("NhiRawRange")
                         .HasColumnType("longtext");
@@ -256,9 +250,7 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
 
                     b.HasIndex("NhiImportLogId");
 
-                    b.HasIndex("NhiCode", "NhiItemName");
-
-                    b.HasIndex("UserId", "ItemCode");
+                    b.HasIndex("UserId", "ItemCode", "ItemName");
 
                     b.ToTable("LabResultDetails");
                 });
@@ -425,6 +417,63 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                     b.ToTable("Users");
                 });
 
+            modelBuilder.Entity("HealthRecord.API.Models.Entities.UserLabItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasDefaultValue("其他")
+                        .HasColumnType("varchar(50)")
+                        .HasMaxLength(50);
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<bool>("IsPreset")
+                        .HasDefaultValue(false)
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("ItemCode")
+                        .IsRequired()
+                        .HasColumnType("varchar(50)")
+                        .HasMaxLength(50);
+
+                    b.Property<string>("ItemName")
+                        .IsRequired()
+                        .HasColumnType("varchar(100)")
+                        .HasMaxLength(100);
+
+                    b.Property<decimal?>("NormalMax")
+                        .HasColumnType("decimal(10,4)");
+
+                    b.Property<decimal?>("NormalMin")
+                        .HasColumnType("decimal(10,4)");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasDefaultValue("")
+                        .HasColumnType("varchar(30)")
+                        .HasMaxLength(30);
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "ItemCode", "ItemName")
+                        .IsUnique();
+
+                    b.ToTable("UserLabItems");
+                });
+
             modelBuilder.Entity("HealthRecord.API.Models.Entities.BloodPressureDetail", b =>
                 {
                     b.HasOne("HealthRecord.API.Models.Entities.HealthRecord", "HealthRecord")
@@ -540,6 +589,17 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("HealthRecord.API.Models.Entities.UserLabItem", b =>
+                {
+                    b.HasOne("HealthRecord.API.Models.Entities.User", "User")
+                        .WithMany("UserLabItems")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("HealthRecord.API.Models.Entities.HealthRecord", b =>
                 {
                     b.Navigation("BloodPressures");
@@ -562,6 +622,8 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                     b.Navigation("Medications");
 
                     b.Navigation("NhiImportLogs");
+
+                    b.Navigation("UserLabItems");
                 });
 #pragma warning restore 612, 618
         }

@@ -9,7 +9,8 @@ public record NhiImportResponse(
     int HealthRecordCount,
     int MedicationCount,
     int LabCount,
-    int SkippedLabs);
+    int SkippedLabs,
+    int NewItemCount);
 
 public record NhiImportLogResponse(
     int Id,

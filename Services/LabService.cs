@@ -119,10 +119,14 @@ public class LabService(AppDbContext db) : ILabService
             .ToList();
     }
 
-    public async Task<List<LabTrendPoint>> GetTrendAsync(int userId, string itemCode)
+    public async Task<List<LabTrendPoint>> GetTrendAsync(int userId, string itemCode, string itemName)
     {
         return await db.LabResultDetails
-            .Where(l => l.UserId == userId && l.ItemCode == itemCode && l.IsNumeric && l.ValueNumeric != null)
+            .Where(l => l.UserId == userId
+                && l.ItemCode == itemCode
+                && l.ItemName == itemName
+                && l.IsNumeric
+                && l.ValueNumeric != null)
             .OrderBy(l => l.RecordedAt)
             .Select(l => new LabTrendPoint(l.RecordedAt, l.ValueNumeric!.Value))
             .ToListAsync();
@@ -131,5 +135,5 @@ public class LabService(AppDbContext db) : ILabService
     private static LabResultResponse Map(LabResultDetail l) => new(
         l.Id, l.HealthRecordId, l.RecordedAt, l.ItemName, l.ItemCode, l.Unit, l.Category,
         l.NormalMin, l.NormalMax, l.IsNumeric, l.ValueNumeric, l.ValueText, l.IsAbnormal,
-        l.NhiCode, l.Source, l.Note, l.CreatedAt);
+        l.Source, l.Note, l.CreatedAt);
 }

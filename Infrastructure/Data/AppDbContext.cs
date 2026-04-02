@@ -13,6 +13,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<LabResultDetail> LabResultDetails => Set<LabResultDetail>();
     public DbSet<MedicationDetail> MedicationDetails => Set<MedicationDetail>();
     public DbSet<NhiImportLog> NhiImportLogs => Set<NhiImportLog>();
+    public DbSet<UserLabItem> UserLabItems => Set<UserLabItem>();
 
     protected override void OnModelCreating(ModelBuilder m)
     {
@@ -57,10 +58,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
 
         m.Entity<LabResultDetail>()
-            .HasIndex(l => new { l.UserId, l.ItemCode });
+            .HasIndex(l => new { l.UserId, l.ItemCode, l.ItemName });
 
-        m.Entity<LabResultDetail>()
-            .HasIndex(l => new { l.NhiCode, l.NhiItemName });
+        m.Entity<UserLabItem>()
+            .HasOne(i => i.User).WithMany(u => u.UserLabItems)
+            .HasForeignKey(i => i.UserId).OnDelete(DeleteBehavior.Cascade);
+
+        m.Entity<UserLabItem>()
+            .HasIndex(i => new { i.UserId, i.ItemCode, i.ItemName }).IsUnique();
 
         m.Entity<MedicationDetail>()
             .HasOne(md => md.User).WithMany(u => u.Medications)

@@ -32,9 +32,11 @@ public class LabController(ILabService service) : BaseController
     }
 
     [HttpGet("trend")]
-    public async Task<ActionResult<ApiResponse<List<LabTrendPoint>>>> GetTrend([FromQuery] string itemCode = "Cr")
+    public async Task<ActionResult<ApiResponse<List<LabTrendPoint>>>> GetTrend(
+        [FromQuery] string itemCode,
+        [FromQuery] string itemName)
     {
-        var result = await service.GetTrendAsync(CurrentUserId, itemCode);
+        var result = await service.GetTrendAsync(CurrentUserId, itemCode, itemName);
         return Ok(ApiResponse<List<LabTrendPoint>>.Ok(result));
     }
 

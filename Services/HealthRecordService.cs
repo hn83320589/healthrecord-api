@@ -84,5 +84,5 @@ public class HealthRecordService(AppDbContext db) : IHealthRecordService
     private static LabResultResponse MapLab(Models.Entities.LabResultDetail l) => new(
         l.Id, l.HealthRecordId, l.RecordedAt, l.ItemName, l.ItemCode, l.Unit, l.Category,
         l.NormalMin, l.NormalMax, l.IsNumeric, l.ValueNumeric, l.ValueText, l.IsAbnormal,
-        l.NhiCode, l.Source, l.Note, l.CreatedAt);
+        l.Source, l.Note, l.CreatedAt);
 }

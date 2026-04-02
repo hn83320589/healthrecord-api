@@ -19,9 +19,7 @@ public class LabResultDetail
     public decimal? ValueNumeric { get; set; }
     public string? ValueText { get; set; }
     public bool IsAbnormal { get; set; }
-    // NHI mapping
-    public string? NhiCode { get; set; }
-    public string? NhiItemName { get; set; }
+    // NHI raw data (debug)
     public string? NhiRawValue { get; set; }
     public string? NhiRawRange { get; set; }
     public string Source { get; set; } = "manual";

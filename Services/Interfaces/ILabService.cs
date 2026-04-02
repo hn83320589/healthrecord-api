@@ -11,5 +11,5 @@ public interface ILabService
     Task<LabResultResponse> UpdateAsync(int userId, int id, UpdateLabResultRequest request);
     Task DeleteAsync(int userId, int id);
     Task<List<LabResultsByDateGroup>> GetByDateAsync(int userId, DateTime? from, DateTime? to);
-    Task<List<LabTrendPoint>> GetTrendAsync(int userId, string itemCode);
+    Task<List<LabTrendPoint>> GetTrendAsync(int userId, string itemCode, string itemName);
 }

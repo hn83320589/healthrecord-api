@@ -1,3 +1,4 @@
+using HealthRecord.API.Common.Constants;
 using HealthRecord.API.Common.Helpers;
 using HealthRecord.API.Infrastructure.Data;
 using HealthRecord.API.Models.DTOs.Auth;
@@ -24,6 +25,24 @@ public class AuthService(AppDbContext db, JwtHelper jwtHelper) : IAuthService
         };
 
         db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var presets = LabItemPresets.Items
+            .Where(p => p.NhiCode != null)
+            .Select(p => new UserLabItem
+            {
+                UserId = user.Id,
+                ItemCode = p.NhiCode!,
+                ItemName = p.NhiItemName ?? "",
+                Unit = p.Unit,
+                Category = p.Category,
+                NormalMin = p.NormalMin,
+                NormalMax = p.NormalMax,
+                IsPreset = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+            });
+        db.UserLabItems.AddRange(presets);
         await db.SaveChangesAsync();
 
         return await IssueTokens(user);

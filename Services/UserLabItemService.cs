@@ -30,6 +30,7 @@ public class UserLabItemService(AppDbContext db) : IUserLabItemService
             UserId = userId,
             ItemCode = request.ItemCode,
             ItemName = request.ItemName,
+            DisplayName = request.DisplayName,
             Unit = request.Unit,
             Category = request.Category,
             NormalMin = request.NormalMin,
@@ -49,10 +50,12 @@ public class UserLabItemService(AppDbContext db) : IUserLabItemService
             .FirstOrDefaultAsync(i => i.Id == id && i.UserId == userId)
             ?? throw new KeyNotFoundException("Lab item not found.");
 
-        item.Unit = request.Unit;
-        item.Category = request.Category;
-        item.NormalMin = request.NormalMin;
-        item.NormalMax = request.NormalMax;
+        if (request.DisplayName != null) item.DisplayName = request.DisplayName;
+        if (request.Unit != null) item.Unit = request.Unit;
+        if (request.Category != null) item.Category = request.Category;
+        if (request.NormalMin.HasValue) item.NormalMin = request.NormalMin;
+        if (request.NormalMax.HasValue) item.NormalMax = request.NormalMax;
+        if (request.SortOrder.HasValue) item.SortOrder = request.SortOrder.Value;
         item.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
@@ -73,6 +76,6 @@ public class UserLabItemService(AppDbContext db) : IUserLabItemService
     }
 
     private static UserLabItemResponse Map(UserLabItem i) => new(
-        i.Id, i.ItemCode, i.ItemName, i.Unit, i.Category,
-        i.NormalMin, i.NormalMax, i.IsPreset, i.CreatedAt, i.UpdatedAt);
+        i.Id, i.ItemCode, i.ItemName, i.DisplayName, i.Unit, i.Category,
+        i.NormalMin, i.NormalMax, i.SortOrder, i.IsPreset, i.CreatedAt, i.UpdatedAt);
 }

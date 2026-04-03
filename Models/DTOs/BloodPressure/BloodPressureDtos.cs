@@ -2,12 +2,13 @@ namespace HealthRecord.API.Models.DTOs.BloodPressure;
 
 public record BloodPressureResponse(
     int Id,
-    int? HealthRecordId,
+    int HealthRecordId,
     DateTime RecordedAt,
     int Systolic,
     int Diastolic,
-    int Pulse,
+    int? Pulse,
     string? MeasurementPosition,
+    string? Arm,
     string Source,
     string? Note,
     DateTime CreatedAt);
@@ -16,17 +17,18 @@ public record CreateBloodPressureRequest(
     DateTime RecordedAt,
     int Systolic,
     int Diastolic,
-    int Pulse,
+    int? Pulse,
     string? MeasurementPosition,
-    string? Note,
-    int? HealthRecordId = null);
+    string? Arm,
+    string? Note);
 
 public record UpdateBloodPressureRequest(
     DateTime RecordedAt,
     int Systolic,
     int Diastolic,
-    int Pulse,
+    int? Pulse,
     string? MeasurementPosition,
+    string? Arm,
     string? Note);
 
 public record BloodPressureStatsResponse(
@@ -40,4 +42,4 @@ public record BloodPressureStatsResponse(
     Dictionary<string, int> CategoryDistribution,
     int TotalCount);
 
-public record BloodPressureChartPoint(DateTime RecordedAt, int Systolic, int Diastolic, int Pulse);
+public record BloodPressureChartPoint(DateTime RecordedAt, int Systolic, int Diastolic, int? Pulse);

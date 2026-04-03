@@ -2,47 +2,41 @@ namespace HealthRecord.API.Models.DTOs.Lab;
 
 public record LabResultResponse(
     int Id,
-    int? HealthRecordId,
+    int HealthRecordId,
     DateTime RecordedAt,
-    string ItemName,
     string ItemCode,
-    string Unit,
-    string Category,
-    decimal? NormalMin,
-    decimal? NormalMax,
+    string ItemName,
+    string? DisplayName,
     bool IsNumeric,
     decimal? ValueNumeric,
     string? ValueText,
-    bool IsAbnormal,
+    string? Unit,
+    string? ReferenceRange,
+    decimal? NormalMin,
+    decimal? NormalMax,
+    string? Category,
     string Source,
     string? Note,
     DateTime CreatedAt);
 
 public record CreateLabResultItem(
-    DateTime RecordedAt,
-    string ItemName,
     string ItemCode,
-    string Unit,
-    string Category,
-    decimal? NormalMin,
-    decimal? NormalMax,
+    string ItemName,
     bool IsNumeric,
     decimal? ValueNumeric,
     string? ValueText,
-    bool IsAbnormal,
-    string? Note,
-    int? HealthRecordId = null);
+    string? Unit,
+    string? ReferenceRange);
 
-public record CreateLabResultsRequest(List<CreateLabResultItem> Items);
+public record CreateLabResultsRequest(
+    DateTime RecordedAt,
+    string? Note,
+    List<CreateLabResultItem> Items);
 
 public record UpdateLabResultRequest(
-    DateTime RecordedAt,
-    decimal? NormalMin,
-    decimal? NormalMax,
-    bool IsNumeric,
     decimal? ValueNumeric,
     string? ValueText,
-    bool IsAbnormal,
+    string? ReferenceRange,
     string? Note);
 
 public record LabResultsByDateGroup(

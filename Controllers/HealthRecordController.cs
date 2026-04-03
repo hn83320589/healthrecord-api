@@ -22,10 +22,10 @@ public class HealthRecordController(IHealthRecordService service) : BaseControll
     }
 
     [HttpGet("{id}")]
-    public async Task<ActionResult<ApiResponse<HealthRecordDetailResponse>>> GetById(int id)
+    public async Task<ActionResult<ApiResponse<HealthRecordResponse>>> GetById(int id)
     {
         var result = await service.GetByIdAsync(CurrentUserId, id);
-        return Ok(ApiResponse<HealthRecordDetailResponse>.Ok(result));
+        return Ok(ApiResponse<HealthRecordResponse>.Ok(result));
     }
 
     [HttpDelete("{id}")]

@@ -17,7 +17,7 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.3")
+                .HasAnnotation("ProductVersion", "9.0.0")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
@@ -30,45 +30,31 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
+                    b.Property<string>("Arm")
+                        .HasColumnType("longtext");
 
                     b.Property<int>("Diastolic")
                         .HasColumnType("int");
 
-                    b.Property<int?>("HealthRecordId")
+                    b.Property<int>("HealthRecordId")
                         .HasColumnType("int");
 
                     b.Property<string>("MeasurementPosition")
                         .HasColumnType("longtext");
 
-                    b.Property<int?>("NhiImportLogId")
+                    b.Property<int?>("Pulse")
                         .HasColumnType("int");
-
-                    b.Property<string>("Note")
-                        .HasColumnType("longtext");
-
-                    b.Property<int>("Pulse")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("RecordedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("Source")
-                        .IsRequired()
-                        .HasColumnType("longtext");
 
                     b.Property<int>("Systolic")
                         .HasColumnType("int");
 
-                    b.Property<int>("UserId")
+                    b.Property<int?>("UserId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("HealthRecordId");
-
-                    b.HasIndex("NhiImportLogId");
+                    b.HasIndex("HealthRecordId")
+                        .IsUnique();
 
                     b.HasIndex("UserId");
 
@@ -122,54 +108,54 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTime>("ClinicDate")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<int?>("Copay")
-                        .HasColumnType("int");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
-
-                    b.Property<string>("Hospital")
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("HospitalCode")
-                        .HasColumnType("longtext");
 
                     b.Property<int?>("NhiImportLogId")
                         .HasColumnType("int");
 
+                    b.Property<string>("NhiInstitution")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("NhiInstitutionCode")
+                        .HasColumnType("longtext");
+
+                    b.Property<DateOnly?>("NhiResultDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("NhiVisitSeq")
+                        .HasColumnType("longtext");
+
                     b.Property<string>("Note")
                         .HasColumnType("longtext");
 
-                    b.Property<string>("PrimaryDiagnosis")
-                        .HasColumnType("longtext");
+                    b.Property<string>("RecordType")
+                        .IsRequired()
+                        .HasColumnType("varchar(255)");
 
-                    b.Property<string>("PrimaryIcdCode")
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("SecondaryDiagnoses")
-                        .HasColumnType("longtext");
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("Source")
                         .IsRequired()
                         .HasColumnType("longtext");
 
-                    b.Property<int?>("TotalPoints")
-                        .HasColumnType("int");
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
 
                     b.Property<int>("UserId")
                         .HasColumnType("int");
 
-                    b.Property<string>("VisitSeq")
-                        .HasColumnType("longtext");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("NhiImportLogId");
+                    b.HasIndex("NhiImportLogId")
+                        .HasDatabaseName("idx_import_log");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId", "RecordType")
+                        .HasDatabaseName("idx_user_type");
+
+                    b.HasIndex("UserId", "RecordedAt")
+                        .HasDatabaseName("idx_user_date");
 
                     b.ToTable("HealthRecords");
                 });
@@ -182,18 +168,8 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<int?>("HealthRecordId")
+                    b.Property<int>("HealthRecordId")
                         .HasColumnType("int");
-
-                    b.Property<bool>("IsAbnormal")
-                        .HasColumnType("tinyint(1)");
 
                     b.Property<bool>("IsNumeric")
                         .HasColumnType("tinyint(1)");
@@ -204,38 +180,24 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
 
                     b.Property<string>("ItemName")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("varchar(255)");
 
-                    b.Property<int?>("NhiImportLogId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("NhiRawRange")
+                    b.Property<string>("NhiOrderName")
                         .HasColumnType("longtext");
 
                     b.Property<string>("NhiRawValue")
                         .HasColumnType("longtext");
 
-                    b.Property<decimal?>("NormalMax")
-                        .HasColumnType("decimal(65,30)");
-
-                    b.Property<decimal?>("NormalMin")
-                        .HasColumnType("decimal(65,30)");
-
-                    b.Property<string>("Note")
-                        .HasColumnType("longtext");
-
-                    b.Property<DateTime>("RecordedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("Source")
-                        .IsRequired()
+                    b.Property<string>("ReferenceRange")
                         .HasColumnType("longtext");
 
                     b.Property<string>("Unit")
-                        .IsRequired()
                         .HasColumnType("longtext");
 
-                    b.Property<int>("UserId")
+                    b.Property<int?>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("UserLabItemId")
                         .HasColumnType("int");
 
                     b.Property<decimal?>("ValueNumeric")
@@ -246,11 +208,15 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("HealthRecordId");
+                    b.HasIndex("HealthRecordId")
+                        .HasDatabaseName("idx_lab_record");
 
-                    b.HasIndex("NhiImportLogId");
+                    b.HasIndex("UserId");
 
-                    b.HasIndex("UserId", "ItemCode", "ItemName");
+                    b.HasIndex("UserLabItemId");
+
+                    b.HasIndex("ItemCode", "ItemName")
+                        .HasDatabaseName("idx_lab_item");
 
                     b.ToTable("LabResultDetails");
                 });
@@ -263,52 +229,60 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
+                    b.Property<decimal?>("Copayment")
+                        .HasColumnType("decimal(65,30)");
 
-                    b.Property<int?>("Days")
-                        .HasColumnType("int");
-
-                    b.Property<string>("DrugName")
-                        .IsRequired()
+                    b.Property<string>("Dosage")
                         .HasColumnType("longtext");
 
-                    b.Property<string>("DrugType")
-                        .IsRequired()
+                    b.Property<int?>("DurationDays")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Frequency")
                         .HasColumnType("longtext");
 
-                    b.Property<int?>("HealthRecordId")
+                    b.Property<string>("GenericName")
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("HealthRecordId")
                         .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("MedicationName")
+                        .IsRequired()
+                        .HasColumnType("longtext");
 
                     b.Property<string>("NhiDrugCode")
-                        .HasColumnType("longtext");
-
-                    b.Property<int?>("NhiImportLogId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Note")
                         .HasColumnType("longtext");
 
                     b.Property<decimal?>("Quantity")
                         .HasColumnType("decimal(65,30)");
 
-                    b.Property<DateTime>("RecordedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("Source")
-                        .IsRequired()
+                    b.Property<string>("Route")
                         .HasColumnType("longtext");
 
-                    b.Property<int>("UserId")
+                    b.Property<DateOnly?>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("VisitDetailId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("HealthRecordId");
-
-                    b.HasIndex("NhiImportLogId");
+                    b.HasIndex("HealthRecordId")
+                        .HasDatabaseName("idx_med_record");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("VisitDetailId");
 
                     b.ToTable("MedicationDetails");
                 });
@@ -321,18 +295,24 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("DataDate")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<DateOnly>("DateRangeEnd")
+                    b.Property<DateOnly?>("DataDate")
                         .HasColumnType("date");
 
-                    b.Property<DateOnly>("DateRangeStart")
+                    b.Property<DateOnly?>("DateRangeEnd")
                         .HasColumnType("date");
 
-                    b.Property<int>("HealthRecordCount")
+                    b.Property<DateOnly?>("DateRangeStart")
+                        .HasColumnType("date");
+
+                    b.Property<int>("DuplicateLabCount")
                         .HasColumnType("int");
+
+                    b.Property<string>("FileHash")
+                        .IsRequired()
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<string>("FileName")
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime>("ImportedAt")
                         .HasColumnType("datetime(6)");
@@ -343,15 +323,26 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                     b.Property<int>("MedicationCount")
                         .HasColumnType("int");
 
-                    b.Property<int>("SkippedLabs")
+                    b.Property<int>("NewItemCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecordCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SkippedLabCount")
                         .HasColumnType("int");
 
                     b.Property<int>("UserId")
                         .HasColumnType("int");
 
+                    b.Property<int>("VisitCount")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId", "FileHash")
+                        .IsUnique()
+                        .HasDatabaseName("uq_user_hash");
 
                     b.ToTable("NhiImportLogs");
                 });
@@ -427,38 +418,37 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
 
                     b.Property<string>("Category")
                         .IsRequired()
-                        .HasDefaultValue("其他")
-                        .HasColumnType("varchar(50)")
-                        .HasMaxLength(50);
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<string>("DisplayName")
+                        .HasColumnType("longtext");
+
                     b.Property<bool>("IsPreset")
-                        .HasDefaultValue(false)
                         .HasColumnType("tinyint(1)");
 
                     b.Property<string>("ItemCode")
                         .IsRequired()
-                        .HasColumnType("varchar(50)")
-                        .HasMaxLength(50);
+                        .HasColumnType("varchar(255)");
 
                     b.Property<string>("ItemName")
                         .IsRequired()
-                        .HasColumnType("varchar(100)")
-                        .HasMaxLength(100);
+                        .HasColumnType("varchar(255)");
 
                     b.Property<decimal?>("NormalMax")
-                        .HasColumnType("decimal(10,4)");
+                        .HasColumnType("decimal(65,30)");
 
                     b.Property<decimal?>("NormalMin")
-                        .HasColumnType("decimal(10,4)");
+                        .HasColumnType("decimal(65,30)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
 
                     b.Property<string>("Unit")
                         .IsRequired()
-                        .HasDefaultValue("")
-                        .HasColumnType("varchar(30)")
-                        .HasMaxLength(30);
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime(6)");
@@ -469,34 +459,95 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("UserId", "ItemCode", "ItemName")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("uq_user_item");
 
                     b.ToTable("UserLabItems");
+                });
+
+            modelBuilder.Entity("HealthRecord.API.Models.Entities.VisitDetail", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CopaymentCode")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Department")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("DiagnosisCode1")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("DiagnosisCode2")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("DiagnosisCode3")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("DiagnosisCode4")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("DiagnosisCode5")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("DiagnosisName1")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("DiagnosisName2")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("DiagnosisName3")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("DiagnosisName4")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("DiagnosisName5")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("DoctorName")
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("HealthRecordId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("MedicalCost")
+                        .HasColumnType("decimal(65,30)");
+
+                    b.Property<string>("NhiRawData")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("VisitType")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("VisitTypeCode")
+                        .HasColumnType("longtext");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HealthRecordId")
+                        .IsUnique();
+
+                    b.ToTable("VisitDetails");
                 });
 
             modelBuilder.Entity("HealthRecord.API.Models.Entities.BloodPressureDetail", b =>
                 {
                     b.HasOne("HealthRecord.API.Models.Entities.HealthRecord", "HealthRecord")
-                        .WithMany("BloodPressures")
-                        .HasForeignKey("HealthRecordId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("HealthRecord.API.Models.Entities.NhiImportLog", "NhiImportLog")
-                        .WithMany()
-                        .HasForeignKey("NhiImportLogId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("HealthRecord.API.Models.Entities.User", "User")
-                        .WithMany("BloodPressures")
-                        .HasForeignKey("UserId")
+                        .WithOne("BloodPressureDetail")
+                        .HasForeignKey("HealthRecord.API.Models.Entities.BloodPressureDetail", "HealthRecordId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("HealthRecord.API.Models.Entities.User", null)
+                        .WithMany("BloodPressures")
+                        .HasForeignKey("UserId");
+
                     b.Navigation("HealthRecord");
-
-                    b.Navigation("NhiImportLog");
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("HealthRecord.API.Models.Entities.EmergencyContact", b =>
@@ -513,7 +564,7 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
             modelBuilder.Entity("HealthRecord.API.Models.Entities.HealthRecord", b =>
                 {
                     b.HasOne("HealthRecord.API.Models.Entities.NhiImportLog", "NhiImportLog")
-                        .WithMany()
+                        .WithMany("HealthRecords")
                         .HasForeignKey("NhiImportLogId")
                         .OnDelete(DeleteBehavior.SetNull);
 
@@ -533,24 +584,21 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                     b.HasOne("HealthRecord.API.Models.Entities.HealthRecord", "HealthRecord")
                         .WithMany("LabResults")
                         .HasForeignKey("HealthRecordId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("HealthRecord.API.Models.Entities.NhiImportLog", "NhiImportLog")
-                        .WithMany()
-                        .HasForeignKey("NhiImportLogId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("HealthRecord.API.Models.Entities.User", "User")
-                        .WithMany("LabResults")
-                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("HealthRecord.API.Models.Entities.User", null)
+                        .WithMany("LabResults")
+                        .HasForeignKey("UserId");
+
+                    b.HasOne("HealthRecord.API.Models.Entities.UserLabItem", "UserLabItem")
+                        .WithMany("LabResults")
+                        .HasForeignKey("UserLabItemId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("HealthRecord");
 
-                    b.Navigation("NhiImportLog");
-
-                    b.Navigation("User");
+                    b.Navigation("UserLabItem");
                 });
 
             modelBuilder.Entity("HealthRecord.API.Models.Entities.MedicationDetail", b =>
@@ -558,24 +606,21 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                     b.HasOne("HealthRecord.API.Models.Entities.HealthRecord", "HealthRecord")
                         .WithMany("Medications")
                         .HasForeignKey("HealthRecordId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("HealthRecord.API.Models.Entities.NhiImportLog", "NhiImportLog")
-                        .WithMany()
-                        .HasForeignKey("NhiImportLogId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("HealthRecord.API.Models.Entities.User", "User")
-                        .WithMany("Medications")
-                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("HealthRecord.API.Models.Entities.User", null)
+                        .WithMany("Medications")
+                        .HasForeignKey("UserId");
+
+                    b.HasOne("HealthRecord.API.Models.Entities.VisitDetail", "VisitDetail")
+                        .WithMany("Medications")
+                        .HasForeignKey("VisitDetailId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("HealthRecord");
 
-                    b.Navigation("NhiImportLog");
-
-                    b.Navigation("User");
+                    b.Navigation("VisitDetail");
                 });
 
             modelBuilder.Entity("HealthRecord.API.Models.Entities.NhiImportLog", b =>
@@ -600,13 +645,31 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("HealthRecord.API.Models.Entities.VisitDetail", b =>
+                {
+                    b.HasOne("HealthRecord.API.Models.Entities.HealthRecord", "HealthRecord")
+                        .WithOne("VisitDetail")
+                        .HasForeignKey("HealthRecord.API.Models.Entities.VisitDetail", "HealthRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("HealthRecord");
+                });
+
             modelBuilder.Entity("HealthRecord.API.Models.Entities.HealthRecord", b =>
                 {
-                    b.Navigation("BloodPressures");
+                    b.Navigation("BloodPressureDetail");
 
                     b.Navigation("LabResults");
 
                     b.Navigation("Medications");
+
+                    b.Navigation("VisitDetail");
+                });
+
+            modelBuilder.Entity("HealthRecord.API.Models.Entities.NhiImportLog", b =>
+                {
+                    b.Navigation("HealthRecords");
                 });
 
             modelBuilder.Entity("HealthRecord.API.Models.Entities.User", b =>
@@ -624,6 +687,16 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                     b.Navigation("NhiImportLogs");
 
                     b.Navigation("UserLabItems");
+                });
+
+            modelBuilder.Entity("HealthRecord.API.Models.Entities.UserLabItem", b =>
+                {
+                    b.Navigation("LabResults");
+                });
+
+            modelBuilder.Entity("HealthRecord.API.Models.Entities.VisitDetail", b =>
+                {
+                    b.Navigation("Medications");
                 });
 #pragma warning restore 612, 618
         }

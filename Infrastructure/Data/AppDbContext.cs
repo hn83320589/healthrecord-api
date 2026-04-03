@@ -11,86 +11,107 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Models.Entities.HealthRecord> HealthRecords => Set<Models.Entities.HealthRecord>();
     public DbSet<BloodPressureDetail> BloodPressureDetails => Set<BloodPressureDetail>();
     public DbSet<LabResultDetail> LabResultDetails => Set<LabResultDetail>();
+    public DbSet<VisitDetail> VisitDetails => Set<VisitDetail>();
     public DbSet<MedicationDetail> MedicationDetails => Set<MedicationDetail>();
     public DbSet<NhiImportLog> NhiImportLogs => Set<NhiImportLog>();
     public DbSet<UserLabItem> UserLabItems => Set<UserLabItem>();
 
     protected override void OnModelCreating(ModelBuilder m)
     {
+        // ── Users ────────────────────────────────────────────────────
         m.Entity<User>()
             .HasIndex(u => u.Email).IsUnique();
 
-        m.Entity<Models.Entities.HealthRecord>()
-            .HasOne(h => h.User).WithMany(u => u.HealthRecords)
-            .HasForeignKey(h => h.UserId).OnDelete(DeleteBehavior.Cascade);
-
-        m.Entity<Models.Entities.HealthRecord>()
-            .HasOne(h => h.NhiImportLog).WithMany()
-            .HasForeignKey(h => h.NhiImportLogId)
-            .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
-
-        m.Entity<BloodPressureDetail>()
-            .HasOne(b => b.User).WithMany(u => u.BloodPressures)
-            .HasForeignKey(b => b.UserId).OnDelete(DeleteBehavior.Cascade);
-
-        m.Entity<BloodPressureDetail>()
-            .HasOne(b => b.HealthRecord).WithMany(h => h.BloodPressures)
-            .HasForeignKey(b => b.HealthRecordId)
-            .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
-
-        m.Entity<BloodPressureDetail>()
-            .HasOne(b => b.NhiImportLog).WithMany()
-            .HasForeignKey(b => b.NhiImportLogId)
-            .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
-
-        m.Entity<LabResultDetail>()
-            .HasOne(l => l.User).WithMany(u => u.LabResults)
-            .HasForeignKey(l => l.UserId).OnDelete(DeleteBehavior.Cascade);
-
-        m.Entity<LabResultDetail>()
-            .HasOne(l => l.HealthRecord).WithMany(h => h.LabResults)
-            .HasForeignKey(l => l.HealthRecordId)
-            .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
-
-        m.Entity<LabResultDetail>()
-            .HasOne(l => l.NhiImportLog).WithMany()
-            .HasForeignKey(l => l.NhiImportLogId)
-            .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
-
-        m.Entity<LabResultDetail>()
-            .HasIndex(l => new { l.UserId, l.ItemCode, l.ItemName });
-
-        m.Entity<UserLabItem>()
-            .HasOne(i => i.User).WithMany(u => u.UserLabItems)
-            .HasForeignKey(i => i.UserId).OnDelete(DeleteBehavior.Cascade);
-
-        m.Entity<UserLabItem>()
-            .HasIndex(i => new { i.UserId, i.ItemCode, i.ItemName }).IsUnique();
-
-        m.Entity<MedicationDetail>()
-            .HasOne(md => md.User).WithMany(u => u.Medications)
-            .HasForeignKey(md => md.UserId).OnDelete(DeleteBehavior.Cascade);
-
-        m.Entity<MedicationDetail>()
-            .HasOne(md => md.HealthRecord).WithMany(h => h.Medications)
-            .HasForeignKey(md => md.HealthRecordId)
-            .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
-
-        m.Entity<MedicationDetail>()
-            .HasOne(md => md.NhiImportLog).WithMany()
-            .HasForeignKey(md => md.NhiImportLogId)
-            .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
-
+        // ── EmergencyContacts ────────────────────────────────────────
         m.Entity<EmergencyContact>()
             .HasOne(c => c.User).WithMany(u => u.EmergencyContacts)
             .HasForeignKey(c => c.UserId).OnDelete(DeleteBehavior.Cascade);
 
-        m.Entity<NhiImportLog>()
-            .HasOne(n => n.User).WithMany(u => u.NhiImportLogs)
-            .HasForeignKey(n => n.UserId).OnDelete(DeleteBehavior.Cascade);
+        // ── HealthRecords (unified record table) ─────────────────────
+        m.Entity<Models.Entities.HealthRecord>(e =>
+        {
+            e.HasOne(h => h.User).WithMany(u => u.HealthRecords)
+                .HasForeignKey(h => h.UserId).OnDelete(DeleteBehavior.Cascade);
 
-        // Global UTC converter: all DateTime fields are stored as UTC,
-        // and read back with Kind.Utc so comparisons with DateTime.UtcNow are safe.
+            e.HasOne(h => h.NhiImportLog).WithMany(n => n.HealthRecords)
+                .HasForeignKey(h => h.NhiImportLogId)
+                .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+
+            e.HasIndex(h => new { h.UserId, h.RecordType }).HasDatabaseName("idx_user_type");
+            e.HasIndex(h => new { h.UserId, h.RecordedAt }).HasDatabaseName("idx_user_date");
+            e.HasIndex(h => h.NhiImportLogId).HasDatabaseName("idx_import_log");
+        });
+
+        // ── BloodPressureDetails (1:1 with HealthRecord) ────────────
+        m.Entity<BloodPressureDetail>(e =>
+        {
+            e.HasOne(b => b.HealthRecord).WithOne(h => h.BloodPressureDetail)
+                .HasForeignKey<BloodPressureDetail>(b => b.HealthRecordId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasIndex(b => b.HealthRecordId).IsUnique();
+        });
+
+        // ── VisitDetails (1:1 with HealthRecord) ────────────────────
+        m.Entity<VisitDetail>(e =>
+        {
+            e.HasOne(v => v.HealthRecord).WithOne(h => h.VisitDetail)
+                .HasForeignKey<VisitDetail>(v => v.HealthRecordId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasIndex(v => v.HealthRecordId).IsUnique();
+        });
+
+        // ── LabResultDetails (many:1 with HealthRecord) ─────────────
+        m.Entity<LabResultDetail>(e =>
+        {
+            e.HasOne(l => l.HealthRecord).WithMany(h => h.LabResults)
+                .HasForeignKey(l => l.HealthRecordId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(l => l.UserLabItem).WithMany(i => i.LabResults)
+                .HasForeignKey(l => l.UserLabItemId)
+                .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+
+            e.HasIndex(l => l.HealthRecordId).HasDatabaseName("idx_lab_record");
+            e.HasIndex(l => new { l.ItemCode, l.ItemName }).HasDatabaseName("idx_lab_item");
+        });
+
+        // ── MedicationDetails (many:1 with HealthRecord) ────────────
+        m.Entity<MedicationDetail>(e =>
+        {
+            e.HasOne(md => md.HealthRecord).WithMany(h => h.Medications)
+                .HasForeignKey(md => md.HealthRecordId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(md => md.VisitDetail).WithMany(v => v.Medications)
+                .HasForeignKey(md => md.VisitDetailId)
+                .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+
+            e.HasIndex(md => md.HealthRecordId).HasDatabaseName("idx_med_record");
+        });
+
+        // ── NhiImportLogs ───────────────────────────────────────────
+        m.Entity<NhiImportLog>(e =>
+        {
+            e.HasOne(n => n.User).WithMany(u => u.NhiImportLogs)
+                .HasForeignKey(n => n.UserId).OnDelete(DeleteBehavior.Cascade);
+
+            e.HasIndex(n => new { n.UserId, n.FileHash })
+                .IsUnique().HasDatabaseName("uq_user_hash");
+        });
+
+        // ── UserLabItems ────────────────────────────────────────────
+        m.Entity<UserLabItem>(e =>
+        {
+            e.HasOne(i => i.User).WithMany(u => u.UserLabItems)
+                .HasForeignKey(i => i.UserId).OnDelete(DeleteBehavior.Cascade);
+
+            e.HasIndex(i => new { i.UserId, i.ItemCode, i.ItemName })
+                .IsUnique().HasDatabaseName("uq_user_item");
+        });
+
+        // ── Global UTC converter ────────────────────────────────────
         var utcConverter = new ValueConverter<DateTime, DateTime>(
             v => v.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(v, DateTimeKind.Utc) : v.ToUniversalTime(),
             v => DateTime.SpecifyKind(v, DateTimeKind.Utc));

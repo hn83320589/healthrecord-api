@@ -19,7 +19,7 @@ public class NhiController(INhiImportService service) : BaseController
         using var reader = new StreamReader(file.OpenReadStream());
         var json = await reader.ReadToEndAsync();
 
-        var result = await service.ImportAsync(CurrentUserId, json);
+        var result = await service.ImportAsync(CurrentUserId, json, file.FileName);
         return Ok(ApiResponse<NhiImportResponse>.Ok(result));
     }
 

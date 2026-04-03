@@ -1,31 +1,16 @@
-# HealthRecord.API
+# HealthRecord.API — CLAUDE.md v2
 
 ## 專案概述
-個人身體紀錄後端 API。以狼瘡腎炎等慢性病日常管理為核心設計場景。
-支援手動輸入與健保存摺 JSON 匯入（`source` 欄位區分來源）。
+
+個人身體紀錄後端 API。以慢性病（狼瘡腎炎、高血壓、糖尿病等）日常管理為核心設計場景。
+支援手動輸入、健保存摺 JSON 匯入、HealthKit 同步（`source` 欄位區分來源）。
 
 部署目標：Zeabur（Docker 容器）
 
 ---
 
-## 開發路線圖
-
-### ✅ Phase 1（現在做）
-- 帳號系統（含身體基本資料、緊急聯絡人）
-- 血壓紀錄（手動 CRUD、統計、圖表）
-- 檢驗紀錄（手動 CRUD、趨勢圖）
-- 看診紀錄（Phase 1 只支援 NHI 匯入，GET + DELETE）
-- 用藥紀錄（Phase 1 只支援 NHI 匯入，GET + DELETE）
-- 健保存摺 JSON 匯入（r7 檢驗 + r1 看診 + r1_1 用藥，新蓋舊策略）
-
-### 🔜 Phase 2（之後做）
-- 看診紀錄手動 CRUD + 回診前彙整 PDF
-- 用藥紀錄手動 CRUD + 服藥提醒
-- 症狀日誌
-
----
-
 ## Tech Stack
+
 - **.NET 9** Web API
 - **Entity Framework Core 9** + `Pomelo.EntityFrameworkCore.MySql`
 - **MySQL 8.x**
@@ -35,34 +20,51 @@
 ---
 
 ## 架構原則
+
 - 分層：Controller → Service → Repository → DbContext
 - 統一回應格式：所有 API 回傳 `ApiResponse<T>`
 - 路由：無版本前綴（直接 `/auth`、`/profile`、`/blood-pressure` 等）
 - 全域錯誤處理：`ExceptionMiddleware`
-- 各功能各自獨立的表，透過 nullable FK 弱關聯，不強制 join
+- `HealthRecords`（record_type）+ 各 Detail 子表，支援無痛擴展新紀錄類型
+- `UserLabItems` 動態維護檢驗項目，取代硬編碼常數
 
 ---
 
-## 設計哲學
+## 開發路線圖
 
-```
-每張 Detail 表（BloodPressureDetails / LabResultDetails / MedicationDetails）
-  唯一必填外來鍵：user_id
-  弱關聯：health_record_id（NULL = 與看診無關，NOT NULL = 隸屬於某次看診）
-  匯入追蹤：nhi_import_log_id（NULL = 手動輸入，NOT NULL = NHI 匯入）
+### ✅ Phase 1（基礎功能）
 
-這樣 GET 查詢時：
-  查血壓：SELECT * FROM BloodPressureDetails WHERE user_id = ?
-  查某次看診的用藥：SELECT * FROM MedicationDetails WHERE health_record_id = ?
-  查某批匯入的資料：SELECT * FROM LabResultDetails WHERE nhi_import_log_id = ?
-  不需要 join 一堆表
-```
+- 帳號系統（註冊、登入、JWT、Profile、緊急聯絡人）
+- 血壓紀錄（手動 CRUD、統計、圖表）
+- 檢驗數值（手動 CRUD、趨勢圖）
+- 檢驗項目動態維護（UserLabItems CRUD、註冊初始化、匯入自動新增）
+- 回診紀錄（NHI 匯入 + 手動 CRUD）
+- 用藥紀錄（NHI 匯入 + 手動 CRUD）
+- 健保存摺 JSON 匯入（r7 檢驗 + r1 回診 + r1_1 醫令）
+- NHI 匯入去重（SHA256 hash + r7 dedup）
+- 測試資料 Seed（多帳號、多情境）
+
+### 🔜 Phase 2（進階功能）
+
+- 服藥提醒通知（MedicationReminders）
+- 症狀日誌（SymptomLogs）
+- 回診前彙整 / 摘要 PDF 匯出
+- 回診 ↔ 檢驗 ↔ 血壓 關聯查詢
+
+### 🔮 未來擴充（Schema 預留）
+
+- 體重 / 體組成紀錄（record_type='body_composition'）
+- 運動紀錄（record_type='exercise'）
+- 疫苗接種（匯入 NHI r6）
+- 中醫紀錄（匯入 NHI r9）
+- 影像檢查（匯入 NHI r8）
+- 資料匯出 / FHIR 格式相容
 
 ---
 
 ## 資料庫 Schema
 
-### Users
+### 帳號
 
 ```sql
 Users
@@ -74,15 +76,15 @@ Users
   gender             VARCHAR(20) NULL
   height_cm          DECIMAL(5,1) NULL
   weight_kg          DECIMAL(5,2) NULL
-  blood_type         VARCHAR(5) NULL          -- 'A+' | 'B-' | 'O+' | 'AB+' 等
-  chronic_conditions TEXT NULL
-  allergies          TEXT NULL
+  blood_type         VARCHAR(5) NULL          -- 'A+' | 'B-' | 'O+' | 'AB+' ...
+  chronic_conditions TEXT NULL                -- JSON array: ["SLE", "Lupus Nephritis"]
+  allergies          TEXT NULL                -- JSON array: ["Penicillin"]
   created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
   updated_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 
 EmergencyContacts
   id           INT PK AUTO_INCREMENT
-  user_id      INT NOT NULL FK → Users(id) ON DELETE CASCADE
+  user_id      INT FK → Users(id) ON DELETE CASCADE
   name         VARCHAR(100) NOT NULL
   relationship VARCHAR(50) NOT NULL
   phone        VARCHAR(30) NOT NULL
@@ -91,403 +93,530 @@ EmergencyContacts
   created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ```
 
-### HealthRecords（看診主表）
+### 檢驗項目維護檔
 
 ```sql
--- 一次看診 = 一筆 HealthRecords
--- 血壓/檢驗/用藥可以獨立存在，不一定要有對應看診
-HealthRecords
-  id                   INT PK AUTO_INCREMENT
-  user_id              INT NOT NULL FK → Users(id) ON DELETE CASCADE
-  clinic_date          DATETIME NOT NULL              -- 就醫日期
-  hospital             VARCHAR(100) NULL              -- 高雄榮總
-  hospital_code        VARCHAR(20) NULL               -- 0602030026（NHI 機構代碼）
-  visit_seq            VARCHAR(20) NULL               -- NHI 就醫序號，r1.7
-  primary_icd_code     VARCHAR(20) NULL               -- 主診斷 ICD，r1.8
-  primary_diagnosis    VARCHAR(200) NULL              -- 主診斷名稱，r1.9
-  secondary_diagnoses  TEXT NULL                      -- 次診斷 JSON 陣列
-                                                      -- [{"code":"I129","name":"高血壓性慢性腎臟病"}]
-  copay                INT NULL                       -- 部分負擔，r1.12
-  total_points         INT NULL                       -- 總點數，r1.13
-  source               VARCHAR(20) NOT NULL DEFAULT 'manual'
-                                                      -- 'manual' | 'nhi_import'
-  nhi_import_log_id    INT NULL FK → NhiImportLogs(id) ON DELETE SET NULL
-                                                      -- 記錄此筆來自哪一次匯入
-  note                 TEXT NULL
-  created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+UserLabItems
+  id            INT PK AUTO_INCREMENT
+  user_id       INT NOT NULL FK → Users(id) ON DELETE CASCADE
+  item_code     VARCHAR(50) NOT NULL      -- r7.8 NHI 申報代碼，如 '09015C'
+  item_name     VARCHAR(100) NOT NULL     -- r7.10 子項目名稱，如 'CRE(肌酸酐)'
+  display_name  VARCHAR(100) NULL         -- 使用者自訂顯示名，如 '肌酸酐'
+  unit          VARCHAR(30) NOT NULL DEFAULT ''
+  category      VARCHAR(50) NOT NULL DEFAULT '其他'
+  normal_min    DECIMAL(10,4) NULL
+  normal_max    DECIMAL(10,4) NULL
+  sort_order    INT NOT NULL DEFAULT 0
+  is_preset     BOOLEAN NOT NULL DEFAULT FALSE
+  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+
+  UNIQUE INDEX uq_user_item (user_id, item_code, item_name)
 ```
 
-### NhiImportLogs
+### 健康紀錄主表
+
+```sql
+HealthRecords
+  id               INT PK AUTO_INCREMENT
+  user_id          INT FK → Users(id) ON DELETE CASCADE
+  record_type      VARCHAR(50) NOT NULL
+                   -- 'blood_pressure' | 'lab_result' | 'visit' | 'medication'
+                   -- 未來擴充：'body_composition' | 'exercise' | 'symptom'
+  recorded_at      DATETIME NOT NULL
+  note             TEXT NULL
+  source           VARCHAR(20) NOT NULL DEFAULT 'manual'
+                   -- 'manual' | 'nhi_import' | 'healthkit'
+  nhi_import_log_id     INT NULL FK → NhiImportLogs(id) ON DELETE SET NULL
+  nhi_institution       VARCHAR(100) NULL   -- r1.4 / r7.4
+  nhi_institution_code  VARCHAR(20) NULL    -- r1.3 / r7.3
+  nhi_visit_seq         VARCHAR(20) NULL    -- r1.7
+  nhi_result_date       DATE NULL           -- r7.6
+  created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+
+  INDEX idx_user_type (user_id, record_type)
+  INDEX idx_user_date (user_id, recorded_at)
+  INDEX idx_import_log (nhi_import_log_id)
+```
+
+### Detail 子表
+
+```sql
+BloodPressureDetails
+  id                 INT PK AUTO_INCREMENT
+  health_record_id   INT UNIQUE FK → HealthRecords(id) ON DELETE CASCADE
+  systolic           INT NOT NULL
+  diastolic          INT NOT NULL
+  pulse              INT NULL
+  measurement_position VARCHAR(20) NULL   -- 'sitting' | 'standing' | 'lying'
+  arm                VARCHAR(10) NULL     -- 'left' | 'right'
+
+LabResultDetails
+  id                 INT PK AUTO_INCREMENT
+  health_record_id   INT FK → HealthRecords(id) ON DELETE CASCADE
+  user_lab_item_id   INT NULL FK → UserLabItems(id) ON DELETE SET NULL
+  item_code          VARCHAR(50) NOT NULL    -- r7.8
+  item_name          VARCHAR(100) NOT NULL   -- r7.10
+  is_numeric         BOOLEAN NOT NULL DEFAULT TRUE
+  value_numeric      DECIMAL(10,4) NULL
+  value_text         VARCHAR(100) NULL       -- '-', '1+', 'Pale yellow', '1:40 SP'
+  unit               VARCHAR(30) NULL
+  reference_range    VARCHAR(200) NULL       -- r7.12 原始格式
+  nhi_order_name     VARCHAR(200) NULL       -- r7.9 申報項目全名
+  nhi_raw_value      VARCHAR(100) NULL       -- r7.11 原始值
+
+  INDEX idx_record (health_record_id)
+  INDEX idx_item (item_code, item_name)
+
+VisitDetails
+  id                 INT PK AUTO_INCREMENT
+  health_record_id   INT UNIQUE FK → HealthRecords(id) ON DELETE CASCADE
+  visit_type         VARCHAR(50) NULL
+  visit_type_code    VARCHAR(10) NULL        -- r1.1
+  department         VARCHAR(100) NULL
+  doctor_name        VARCHAR(100) NULL
+  diagnosis_code_1   VARCHAR(20) NULL        -- r1.8
+  diagnosis_name_1   VARCHAR(200) NULL       -- r1.9
+  diagnosis_code_2   VARCHAR(20) NULL        -- r1.10
+  diagnosis_name_2   VARCHAR(200) NULL       -- r1.11
+  diagnosis_code_3   VARCHAR(20) NULL        -- r1.14（注意跳過 r1.12/13）
+  diagnosis_name_3   VARCHAR(200) NULL       -- r1.15
+  diagnosis_code_4   VARCHAR(20) NULL        -- r1.16
+  diagnosis_name_4   VARCHAR(200) NULL       -- r1.17
+  diagnosis_code_5   VARCHAR(20) NULL        -- r1.18
+  diagnosis_name_5   VARCHAR(200) NULL       -- r1.19
+  copayment_code     VARCHAR(10) NULL        -- r1.12
+  medical_cost       DECIMAL(10,2) NULL      -- r1.13
+  nhi_raw_data       JSON NULL
+
+MedicationDetails
+  id                 INT PK AUTO_INCREMENT
+  health_record_id   INT FK → HealthRecords(id) ON DELETE CASCADE
+  visit_detail_id    INT NULL FK → VisitDetails(id) ON DELETE SET NULL
+  medication_name    VARCHAR(200) NOT NULL   -- r1_1.2
+  generic_name       VARCHAR(200) NULL
+  nhi_drug_code      VARCHAR(20) NULL        -- r1_1.1（10碼藥品代碼）
+  quantity           DECIMAL(10,2) NULL      -- r1_1.3
+  copayment          DECIMAL(10,2) NULL      -- r1_1.4
+  dosage             VARCHAR(100) NULL       -- 手動輸入
+  frequency          VARCHAR(100) NULL       -- 手動：'QD' | 'BID' | 'TID'
+  route              VARCHAR(50) NULL        -- 手動：'PO' | 'IV'
+  duration_days      INT NULL
+  is_active          BOOLEAN NOT NULL DEFAULT FALSE  -- Phase 2
+  start_date         DATE NULL
+  end_date           DATE NULL
+
+  INDEX idx_record (health_record_id)
+```
+
+### Phase 2 預留表
+
+```sql
+MedicationReminders
+  id                   INT PK AUTO_INCREMENT
+  user_id              INT FK → Users(id) ON DELETE CASCADE
+  medication_detail_id INT FK → MedicationDetails(id) ON DELETE CASCADE
+  remind_time          TIME NOT NULL
+  days_of_week         VARCHAR(20) NOT NULL
+  is_enabled           BOOLEAN NOT NULL DEFAULT TRUE
+  created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+
+SymptomLogs
+  id               INT PK AUTO_INCREMENT
+  user_id          INT FK → Users(id) ON DELETE CASCADE
+  logged_at        DATETIME NOT NULL
+  symptom_type     VARCHAR(100) NOT NULL
+  severity         INT NOT NULL              -- 1-10
+  body_location    VARCHAR(100) NULL
+  duration_minutes INT NULL
+  triggers         TEXT NULL
+  note             TEXT NULL
+  created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+
+  INDEX idx_user_date (user_id, logged_at)
+```
+
+### 匯入紀錄
 
 ```sql
 NhiImportLogs
   id               INT PK AUTO_INCREMENT
-  user_id          INT NOT NULL FK → Users(id) ON DELETE CASCADE
-  imported_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-  data_date        VARCHAR(8) NOT NULL     -- '20260324'（b1.2 資料截止日）
-  date_range_start DATE NOT NULL           -- 本次資料最早日期
-  date_range_end   DATE NOT NULL           -- 本次資料最晚日期
-  health_record_count INT NOT NULL DEFAULT 0
-  medication_count INT NOT NULL DEFAULT 0
+  user_id          INT FK → Users(id) ON DELETE CASCADE
+  file_hash        VARCHAR(64) NOT NULL
+  file_name        VARCHAR(255) NULL
+  data_date        DATE NULL                 -- b1.2
+  record_count     INT NOT NULL DEFAULT 0
   lab_count        INT NOT NULL DEFAULT 0
-  skipped_labs     INT NOT NULL DEFAULT 0  -- 找不到對應指標的數量
-```
+  visit_count      INT NOT NULL DEFAULT 0
+  medication_count INT NOT NULL DEFAULT 0
+  new_item_count   INT NOT NULL DEFAULT 0
+  skipped_lab_count    INT NOT NULL DEFAULT 0
+  duplicate_lab_count  INT NOT NULL DEFAULT 0
+  date_range_start DATE NULL
+  date_range_end   DATE NULL
+  imported_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 
-### BloodPressureDetails
-
-```sql
-BloodPressureDetails
-  id                   INT PK AUTO_INCREMENT
-  user_id              INT NOT NULL FK → Users(id) ON DELETE CASCADE  -- 唯一必填 FK
-  health_record_id             INT NULL FK → HealthRecords(id) ON DELETE SET NULL  -- 弱關聯
-  nhi_import_log_id    INT NULL FK → NhiImportLogs(id) ON DELETE SET NULL
-  recorded_at          DATETIME NOT NULL
-  systolic             INT NOT NULL              -- 收縮壓
-  diastolic            INT NOT NULL              -- 舒張壓
-  pulse                INT NOT NULL              -- 脈搏
-  measurement_position VARCHAR(20) NULL          -- 'left_arm' | 'right_arm'
-  source               VARCHAR(20) NOT NULL DEFAULT 'manual'
-                                                 -- 'manual' | 'nhi_import' | 'healthkit'
-  note                 TEXT NULL
-  created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-```
-
-### LabResultDetails（合併原 LabItemDefinitions）
-
-```sql
--- 每筆結果自帶項目定義（名稱/代碼/單位/參考範圍）
--- 不再需要獨立的 LabItemDefinitions 表
-LabResultDetails
-  id                   INT PK AUTO_INCREMENT
-  user_id              INT NOT NULL FK → Users(id) ON DELETE CASCADE  -- 唯一必填 FK
-  health_record_id             INT NULL FK → HealthRecords(id) ON DELETE SET NULL  -- 弱關聯
-  nhi_import_log_id    INT NULL FK → NhiImportLogs(id) ON DELETE SET NULL
-  recorded_at          DATETIME NOT NULL
-  -- 項目定義（原 LabItemDefinitions 的欄位）
-  item_name            VARCHAR(100) NOT NULL     -- '肌酸酐'
-  item_code            VARCHAR(50) NOT NULL      -- 'Cr'
-  unit                 VARCHAR(30) NOT NULL      -- 'mg/dL'
-  category             VARCHAR(50) NOT NULL      -- '腎功能'
-  normal_min           DECIMAL(10,4) NULL
-  normal_max           DECIMAL(10,4) NULL
-  -- 結果值（定量 or 定性）
-  is_numeric           BOOLEAN NOT NULL DEFAULT TRUE
-  value_numeric        DECIMAL(10,4) NULL        -- 定量：1.20, 69.7
-  value_text           VARCHAR(200) NULL         -- 定性：'-', '1+', '1:40 SP'
-  is_abnormal          BOOLEAN NOT NULL DEFAULT FALSE
-  -- NHI 對應與原始值保留
-  nhi_code             VARCHAR(20) NULL          -- '09015C'（匯入比對用）
-  nhi_item_name        VARCHAR(100) NULL         -- 'CRE(肌酸酐)'（匯入比對用）
-  nhi_raw_value        VARCHAR(200) NULL         -- r7.11 原始值（debug）
-  nhi_raw_range        VARCHAR(500) NULL         -- r7.12 原始範圍（debug）
-  source               VARCHAR(20) NOT NULL DEFAULT 'manual'
-                                                 -- 'manual' | 'nhi_import'
-  note                 TEXT NULL
-  created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-```
-
-### MedicationDetails
-
-```sql
-MedicationDetails
-  id                   INT PK AUTO_INCREMENT
-  user_id              INT NOT NULL FK → Users(id) ON DELETE CASCADE  -- 唯一必填 FK
-  health_record_id             INT NULL FK → HealthRecords(id) ON DELETE SET NULL  -- 弱關聯
-  nhi_import_log_id    INT NULL FK → NhiImportLogs(id) ON DELETE SET NULL
-  recorded_at          DATETIME NOT NULL
-  drug_name            VARCHAR(200) NOT NULL     -- '那寶膜衣錠50毫克'
-  nhi_drug_code        VARCHAR(30) NULL          -- 'AB57103100'
-  quantity             DECIMAL(8,2) NULL         -- 56.00（顆數）
-  days                 INT NULL                  -- 28（給藥天數）
-  drug_type            VARCHAR(20) NOT NULL DEFAULT 'medication'
-                                                 -- 'medication' | 'exam' | 'service'
-  source               VARCHAR(20) NOT NULL DEFAULT 'manual'
-                                                 -- 'manual' | 'nhi_import'
-  note                 TEXT NULL
-  created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  UNIQUE INDEX uq_user_hash (user_id, file_hash)
 ```
 
 ---
 
-## 表結構總覽
+## NHI 健保存摺 JSON 結構參考
+
+### 頂層結構
 
 ```
-Users (1)
-  ├── EmergencyContacts (多，強關聯)
-  ├── HealthRecords (多，看診主表)
-  │     └── nhi_import_log_id → NhiImportLogs（nullable）
-  ├── BloodPressureDetails (多，可獨立)
-  │     ├── health_record_id → HealthRecords（nullable，弱關聯）
-  │     └── nhi_import_log_id → NhiImportLogs（nullable）
-  ├── LabResultDetails (多，可獨立)
-  │     ├── health_record_id → HealthRecords（nullable，弱關聯）
-  │     └── nhi_import_log_id → NhiImportLogs（nullable）
-  ├── MedicationDetails (多，可獨立)
-  │     ├── health_record_id → HealthRecords（nullable，弱關聯）
-  │     └── nhi_import_log_id → NhiImportLogs（nullable）
-  └── NhiImportLogs (多，匯入批次記錄)
+myhealthbank.bdata
+├── b1.1    身分證字號（部分遮蔽）
+├── b1.2    資料日期（西元 YYYYMMDD）
+├── r0      聲明書（忽略）
+├── r1[]    西醫門診/住院紀錄 ← 匯入
+│   └── r1_1[]  醫令明細（混合：藥品處方 + 檢驗醫令 + 診察費）
+├── r3[]    牙醫（未來擴充）
+├── r6[]    疫苗接種（未來擴充）
+├── r7[]    檢驗結果 ← 匯入
+├── r8[]    影像/病理檢查（未來擴充）
+├── r9[]    中醫（未來擴充）
+└── r10~R14 其他（通常無資料）
 ```
+
+### r1 欄位對應
+
+| 欄位 | 說明 | DB 欄位 |
+|------|------|---------|
+| r1.1 | 類型代碼（5=醫學中心, 4=診所） | visit_type_code |
+| r1.3 | 醫事機構代碼 | nhi_institution_code |
+| r1.4 | 醫事機構名稱 | nhi_institution |
+| r1.5 | 就醫日期 YYYYMMDD | recorded_at |
+| r1.7 | 就醫序號 | nhi_visit_seq |
+| r1.8/r1.9 | 主診斷 ICD + 名稱 | diagnosis_code_1/name_1 |
+| r1.10/r1.11 | 次診斷 2 | diagnosis_code_2/name_2 |
+| **r1.12** | **部分負擔代碼（非診斷！）** | copayment_code |
+| **r1.13** | **醫療費用點數（非診斷！）** | medical_cost |
+| r1.14/r1.15 | 診斷 3 | diagnosis_code_3/name_3 |
+| r1.16/r1.17 | 診斷 4 | diagnosis_code_4/name_4 |
+| r1.18/r1.19 | 診斷 5 | diagnosis_code_5/name_5 |
+
+### r1_1 欄位對應（醫令明細 — 混合內容）
+
+| 欄位 | 說明 | 範例 |
+|------|------|------|
+| r1_1.1 | 醫令代碼 | '09015C'（檢驗）/ 'AB57103100'（藥品）/ '00156A'（診察費） |
+| r1_1.2 | 醫令名稱 | '肌酸酐、血' / '那寶膜衣錠50毫克' |
+| r1_1.3 | 數量 | '56.00' |
+| r1_1.4 | 自付額 | '28' |
+
+**分類邏輯**：
+- 藥品：代碼 10 碼，首字 A/B/C/N → MedicationDetails
+- 檢驗醫令：代碼 ≤6 碼，首兩碼 06~12 → 忽略（r7 有結果）
+- 診察費/藥事費：首兩碼 00~05 → 忽略
+
+### r7 欄位對應
+
+| 欄位 | 說明 | DB 欄位 | 範例 |
+|------|------|---------|------|
+| r7.3 | 機構代碼 | nhi_institution_code | '0602030026' |
+| r7.4 | 機構名稱 | nhi_institution | '高雄榮總' |
+| r7.5 | 就醫日期 | recorded_at | '20230131' |
+| r7.6 | 報告日期 | nhi_result_date | '20230324' |
+| **r7.8** | **申報代碼** | **item_code** | '09015C' |
+| r7.9 | 申報項目全名 | nhi_order_name | '肌酸酐、血' |
+| **r7.10** | **子項目名稱** | **item_name** | 'CRE(肌酸酐)' |
+| **r7.11** | **檢驗值** | value | '1.20' / '-' / 'Pale yellow' |
+| **r7.12** | **參考範圍** | reference_range | '[0.7][1.3]' / '[無][]' |
+
+### r7 重要注意事項
+
+1. **r7 有重複**：同日同項目可出現 2~4 筆，dedup by (r7.5+r7.8+r7.10+r7.11)
+2. **全形/半形混用**：'WBC＆PUS CELL' vs 'WBC&PUS CELL'，比對時正規化
+3. **過濾非臨床項目**：r7.10 = 'Appearance' / '顏色' / '混濁度' / 'GENERAL URINE EXAMINATION' → 跳過
+4. **r7.12 格式**：[low][high]、[無][]、[無][＜1.0]、[(0-5)][] 等多種
 
 ---
 
-## 預設檢驗項目 Seed（常數，非 DB 表）
+## Seed Data — 系統預設檢驗項目
 
-手動新增檢驗時，前端提供「常用項目選單」，從 App 常數載入（不需 DB 查詢）。
-NHI 匯入時，以 `nhi_code + nhi_item_name` 比對常數，填入 `item_name / item_code / unit / category / normal_min / normal_max`。
+item_code/item_name 必須與 NHI r7.8/r7.10 完全一致：
 
-```csharp
-// Common/Constants/LabItemPresets.cs
-public static class LabItemPresets
-{
-    public static readonly List<LabItemPreset> Items = new()
-    {
-        // 腎功能
-        new("肌酸酐",   "Cr",    "mg/dL",            "腎功能", 0.7m,  1.3m,  "09015C", "CRE(肌酸酐)"),
-        new("腎絲球過濾率","eGFR","mL/min/1.73m²",   "腎功能", 60m,   null,  "09015C", "eGFR"),
-        new("尿素氮",   "BUN",   "mg/dL",            "腎功能", 7m,    25m,   "09002C", "血中尿素氮"),
-        new("尿肌酐",   "uCr",   "mg/dL",            "腎功能", null,  null,  "09016C", "CRE(肌酸酐)"),
-        new("微白蛋白", "Microalbumin","mg/dL",       "腎功能", null,  1.9m,  "12111C", "Microalbumin"),
-        new("UACR",    "UACR",  "mg/g",             "腎功能", null,  30m,   "12111C", "UACR"),
-        new("UPCR",    "UPCR",  "mg/g",             "腎功能", null,  200m,  null,     null),
-        // 免疫指標
-        new("抗雙股DNA抗體","anti-dsDNA","IU/mL",    "免疫指標",0m,   15m,   "12060C", "Anti ds-DNA Ab"),
-        new("抗核抗體", "ANA",   "–",                "免疫指標",null,  null,  "12053C", "ANA"),
-        new("補體C3",   "C3",    "mg/dL",            "免疫指標",87m,   200m,  "12034B", "C3"),
-        new("補體C4",   "C4",    "mg/dL",            "免疫指標",19m,   52m,   "12038B", "C4"),
-        // 血球
-        new("白血球",   "WBC",   "10³/μL",           "血球",    4.1m,  10.5m, "08011C", "WBC 白血球"),
-        new("紅血球",   "RBC",   "10⁶/μL",           "血球",    4.3m,  6.0m,  "08011C", "RBC 紅血球"),
-        new("血色素",   "Hb",    "g/dL",             "血球",    13.4m, 17.2m, "08011C", "Hemoglobin 血色素"),
-        new("血球比容值","Hct",  "%",                "血球",    39.8m, 50.7m, "08011C", "Hematocrit 血球比容值"),
-        new("血小板",   "PLT",   "10³/μL",           "血球",    160m,  370m,  "08011C", "Platelet 血小板"),
-        new("平均血球容積","MCV","fL",               "血球",    83.4m, 98.5m, "08011C", "MCV 平均血球容積"),
-        new("嗜中性球", "Neutrophil","%",            "血球",    41.8m, 70.8m, "08013C", "Neutrophil Seg.嗜中性"),
-        new("淋巴球",   "Lymphocyte","%",            "血球",    20.7m, 49.2m, "08013C", "Lymphocyte 淋巴球"),
-        // 發炎指標
-        new("C反應蛋白","CRP",   "mg/L",             "發炎指標",0m,    1.0m,  "12015C", "Ｃ反應性蛋白試驗－免疫比濁法"),
-        new("紅血球沈降","ESR",  "mm/hr",            "發炎指標",2m,    10m,   "08005C", "血球沉降率1小時"),
-        // 肝功能
-        new("丙胺酸轉胺酶","ALT","U/L",              "肝功能",  0m,    40m,   "09026C", "血清麩胺酸丙酮酸轉氨基"),
-        new("天門冬胺酸","AST",  "U/L",              "肝功能",  13m,   39m,   "09025C", "血清麩胺酸苯醋酸轉氨基"),
-        // 血脂
-        new("總膽固醇", "Cholesterol","mg/dL",       "血脂",    null,  200m,  "09001C", "總膽固醇"),
-        new("三酸甘油脂","TG",  "mg/dL",             "血脂",    null,  150m,  "09004C", "三酸甘油脂 TG"),
-        new("高密度脂蛋白","HDL","mg/dL",            "血脂",    40m,   null,  "09043C", "高密度脂蛋白－膽固醇"),
-        new("低密度脂蛋白","LDL","mg/dL",            "血脂",    null,  130m,  "09044C", "低密度脂蛋白 LDL"),
-        // 血糖
-        new("空腹血糖", "Glucose","mg/dL",           "血糖",    70m,   100m,  "09005C", "飯前血糖 Glucose"),
-        new("醣化血色素","HbA1c","%",               "血糖",    null,  5.7m,  "09006C", "醣化血色素"),
-        // 電解質
-        new("鈉",       "Na",    "mEq/L",            "電解質",  136m,  146m,  "09021C", "鈉"),
-        new("鉀",       "K",     "mEq/L",            "電解質",  3.5m,  5.1m,  "09022C", "鉀"),
-        new("氯",       "Cl",    "mEq/L",            "電解質",  101m,  109m,  "09023C", "氯"),
-        new("鈣",       "Ca",    "mg/dL",            "電解質",  8.6m,  10.3m, "09011C", "CA(鈣)"),
-        // 其他
-        new("尿酸",     "Uric_acid","mg/dL",         "其他",    4.4m,  7.6m,  "09013C", "尿酸"),
-        new("白蛋白",   "Albumin","g/dL",            "其他",    3.5m,  5.7m,  "09038C", "白蛋白"),
-        new("肌酸磷化酶","CK",   "U/L",             "其他",    30m,   223m,  "09032C", "肌酸磷化?"),
-    };
-}
+**腎功能**
+| item_code | item_name | display_name | unit | min | max |
+|-----------|-----------|--------------|------|-----|-----|
+| 09015C | CRE(肌酸酐) | 肌酸酐 | mg/dL | 0.7 | 1.3 |
+| 09015C | eGFR | eGFR | mL/min/1.73m² | 60 | - |
+| 09002C | 血中尿素氮 | BUN | mg/dL | 7 | 25 |
+| 09013C | 尿酸 | 尿酸 | mg/dL | 4.4 | 7.6 |
+| 12111C | Microalbumin | 微量白蛋白 | mg/L | - | 1.9 |
+| 12111C | UACR | UACR | mg/g | - | 30 |
+| 09011C | CA(鈣) | 鈣 | mg/dL | 8.6 | 10.3 |
+| 09012C | 磷 | 磷 | mg/dL | 2.5 | 5.0 |
 
-public record LabItemPreset(
-    string ItemName, string ItemCode, string Unit, string Category,
-    decimal? NormalMin, decimal? NormalMax,
-    string? NhiCode, string? NhiItemName);
-```
+**免疫**
+| item_code | item_name | display_name | unit | min | max |
+|-----------|-----------|--------------|------|-----|-----|
+| 12034B | C3 | 補體C3 | mg/dL | 87 | 200 |
+| 12038B | C4 | 補體C4 | mg/dL | 19 | 52 |
+| 12060C | Anti ds-DNA Ab | 抗dsDNA抗體 | IU/mL | - | 10 |
+| 12053C | ANA | 抗核抗體 | -- | - | - |
+| 12025B | IgG | IgG | mg/dL | 610 | 1616 |
+| 12027B | IgA | IgA | mg/dL | 84.5 | 499 |
+| 12029B | IgM | IgM | mg/dL | 35 | 242 |
+| 12015C | Ｃ反應性蛋白試驗－免疫比濁法 | CRP | mg/dL | - | 1.0 |
 
----
+**血液**
+| item_code | item_name | display_name | unit | min | max |
+|-----------|-----------|--------------|------|-----|-----|
+| 08011C | WBC 白血球 | WBC | 10³/μL | 4.1 | 10.5 |
+| 08011C | RBC 紅血球 | RBC | 10⁶/μL | 4.3 | 6.0 |
+| 08011C | Hemoglobin 血色素 | Hb | g/dL | 13.4 | 17.2 |
+| 08011C | Hematocrit 血球比容值 | Hct | % | 39.8 | 50.7 |
+| 08011C | Platelet 血小板 | PLT | 10³/μL | 160 | 370 |
+| 08011C | MCV 平均血球容積 | MCV | fL | 83.4 | 98.5 |
+| 08005C | 血球沉降率1小時 | ESR | mm/hr | 2 | 10 |
 
-## NHI 匯入策略（新蓋舊）
+**肝功能**
+| item_code | item_name | display_name | unit | min | max |
+|-----------|-----------|--------------|------|-----|-----|
+| 09025C | 血清麩胺酸苯醋酸轉氨基酶 | AST | U/L | 13 | 39 |
+| 09026C | 血清麩胺酸丙酮酸轉氨基酶 | ALT | U/L | 0 | 40 |
+| 09038C | 白蛋白 | Albumin | g/dL | 3.5 | 5.7 |
+| 09040C | 總蛋白 | T-Protein | g/dL | 6.0 | 8.3 |
 
-```
-1. 解析 JSON，計算 date_range_start / date_range_end
-2. Transaction 內：
-   a. 刪除日期範圍內 source='nhi_import' 的舊資料：
-      DELETE HealthRecords     WHERE user_id=? AND source='nhi_import' AND visited_at BETWEEN ...
-      DELETE BloodPressureDetails  WHERE user_id=? AND source='nhi_import' AND recorded_at BETWEEN ...
-      DELETE LabResultDetails  WHERE user_id=? AND source='nhi_import' AND recorded_at BETWEEN ...
-      DELETE MedicationDetails WHERE user_id=? AND source='nhi_import' AND recorded_at BETWEEN ...
-   b. r1  → HealthRecords（含 nhi_import_log_id）
-   c. r1_1→ MedicationDetails（health_record_id = 對應 HealthRecord.id，nhi_import_log_id）
-   d. r7  → LabResultDetails（health_record_id = 對應 HealthRecord.id 或 null，nhi_import_log_id）
-   e. 寫入 NhiImportLog
-   source='manual' 的資料完全不受影響
-```
+**血脂**
+| item_code | item_name | display_name | unit | min | max |
+|-----------|-----------|--------------|------|-----|-----|
+| 09001C | 總膽固醇 | T-Chol | mg/dL | - | 200 |
+| 09004C | 三酸甘油脂 TG | TG | mg/dL | - | 150 |
+| 09043C | 高密度脂蛋白－膽固醇 | HDL-C | mg/dL | 40 | - |
+| 09044C | 低密度脂蛋白 LDL | LDL-C | mg/dL | - | 130 |
 
-## NHI 撤銷策略
+**血糖**
+| item_code | item_name | display_name | unit | min | max |
+|-----------|-----------|--------------|------|-----|-----|
+| 09005C | 飯前血糖 Glucose | 飯前血糖 | mg/dL | 70 | 100 |
+| 09006C | 醣化血色素 | HbA1c | % | - | 5.7 |
 
-```
-DELETE HealthRecords     WHERE nhi_import_log_id = logId
-DELETE BloodPressureDetails  WHERE nhi_import_log_id = logId
-DELETE LabResultDetails  WHERE nhi_import_log_id = logId
-DELETE MedicationDetails WHERE nhi_import_log_id = logId
-DELETE NhiImportLogs     WHERE id = logId
-不需要 join，每張表直接查自己的 nhi_import_log_id
-```
+**電解質**
+| item_code | item_name | display_name | unit | min | max |
+|-----------|-----------|--------------|------|-----|-----|
+| 09021C | 鈉 | Na | mEq/L | 136 | 146 |
+| 09022C | 鉀 | K | mEq/L | 3.5 | 5.1 |
+| 09023C | 氯 | Cl | mEq/L | 101 | 109 |
+
+**尿液**
+| item_code | item_name | display_name | unit | min | max |
+|-----------|-----------|--------------|------|-----|-----|
+| 06013C | 蛋白 | 尿蛋白 | -- | - | - |
+| 06012C | RBC | 尿液RBC | /HPF | 0 | 2 |
+| 06012C | WBC＆PUS CELL | 尿液WBC | /HPF | 0 | 5 |
+| 06013C | 比重 | 尿比重 | -- | 1.005 | 1.030 |
 
 ---
 
-## NHI r1_1 藥品類型判斷
+## 測試帳號
 
-```
-drug_type 規則：
-  nhi_drug_code 以字母開頭（AB57103100, BC230161G0）→ 'medication'（真正的藥品）
-  nhi_drug_code 為 00xxx 或 05xxx                   → 'service'（診察費/藥事費）
-  其餘純數字開頭                                      → 'exam'（檢驗申報代碼）
-```
+| # | email | 情境 | 血壓 | 檢驗 | 回診 | 用藥 |
+|---|-------|------|------|------|------|------|
+| 1 | sle@test.com | SLE腎炎 | ~360筆/6月 | 8次/2年 | 8筆 | 5-8種/次 |
+| 2 | htn@test.com | 高血壓 | ~90筆/3月 | 2次/年 | 4筆 | 1-2種 |
+| 3 | dm@test.com | 糖尿病 | ~60筆/2月 | 4次/年 | 4筆 | 2種 |
+| 4 | healthy@test.com | 健康體檢 | 5筆 | 1次 | 0筆 | 0種 |
+
+密碼統一 `Test1234!`。Seed 冪等：以 email 判斷已存在則跳過。僅 `IsDevelopment()` 執行。
 
 ---
 
-## API 端點清單
+## 給 Claude Code 的指示
 
-### Phase 1
+1. **卡住三次就停**：Maximum 3 attempts per issue, then STOP and report.
+2. **每次任務完成後更新 CLAUDE.md**。
+3. **Migration 命名**：`YYYYMMDD_DescriptiveName`。
+4. **不允許無 issue 的 TODO**。
+5. **API 回應一律 `ApiResponse<T>`**。
+6. **NHI 匯入**：JSON 編碼使用 `utf-8-sig`（含 BOM）。
+7. **item_name 比對**：全形/半形正規化後比對。
 
+---
+
+## NHI 匯入流程
+
+### 整體步驟
+
+1. 計算 JSON 的 SHA256 hash → 查 NhiImportLogs 防重複
+2. 解析 r1 → 建立 HealthRecords(visit) + VisitDetails
+3. 解析 r1_1 → 分類處理：
+   - **藥品**（代碼 10 碼，首字 A/B/C/N）→ HealthRecords(medication) + MedicationDetails，關聯到對應 VisitDetails
+   - **檢驗醫令**（≤6碼，首兩碼 06~12）→ 忽略（r7 有實際結果）
+   - **診察費/藥事費**（首兩碼 00~05）→ 忽略
+4. 解析 r7 → 每筆建立 HealthRecords(lab_result) + LabResultDetails
+   - 查 UserLabItems(item_code + item_name)：找到 → 填入 user_lab_item_id；找不到 → 自動新增
+   - r7 去重：(r7.5 + r7.8 + r7.10 + r7.11) 相同的只取第一筆
+   - 過濾：r7.10 含 'Appearance' / '顏色' / '混濁度' / 'GENERAL URINE EXAMINATION' → 跳過
+   - 定量/定性判斷：`decimal.TryParse(r7.11)` 成功 → is_numeric=true
+5. 記錄 NhiImportLogs
+
+### 同日多筆 r1 合併
+
+同一天同機構可有 2~3 筆 r1（檢驗醫令、藥品處方分開），
+用 (r1.5 + r1.3 + r1.7) 組合識別同一次就醫，合併為同一個 VisitDetails。
+多筆 r1 的診斷取第一筆非空的。
+
+### 撤銷匯入
+
+按 `nhi_import_log_id` 查詢所有關聯 HealthRecords → CASCADE 刪除 Details → 刪除 NhiImportLogs。
+自動新增的 UserLabItems 不刪除。
+
+---
+
+## API 路由總覽
+
+### 認證
 ```
 POST   /auth/register
 POST   /auth/login
 POST   /auth/refresh
+```
 
+### 個人資料
+```
 GET    /profile
 PUT    /profile
 GET    /profile/emergency-contacts
 POST   /profile/emergency-contacts
 PUT    /profile/emergency-contacts/{id}
 DELETE /profile/emergency-contacts/{id}
+```
 
--- 血壓
-GET    /blood-pressure
-POST   /blood-pressure
+### 血壓紀錄
+```
+GET    /blood-pressure                    -- 分頁、日期範圍
 GET    /blood-pressure/{id}
-PUT    /blood-pressure/{id}              -- 僅 source='manual'
-DELETE /blood-pressure/{id}              -- 僅 source='manual'
-GET    /blood-pressure/stats
-GET    /blood-pressure/chart-data
+POST   /blood-pressure
+PUT    /blood-pressure/{id}
+DELETE /blood-pressure/{id}
+GET    /blood-pressure/statistics
+```
 
--- 檢驗
+### 檢驗數值
+```
 GET    /lab-results
-POST   /lab-results                      -- 手動新增，多筆同時送出
 GET    /lab-results/{id}
-PUT    /lab-results/{id}                 -- 僅 source='manual'
-DELETE /lab-results/{id}                 -- 僅 source='manual'
-GET    /lab-results/by-date              -- 依日期分組
-GET    /lab-results/trend                -- 趨勢圖（by item_code, is_numeric=true）
+POST   /lab-results
+PUT    /lab-results/{id}
+DELETE /lab-results/{id}
+GET    /lab-results/trend?itemCode=09015C&itemName=CRE(肌酸酐)
+```
 
--- 看診（Phase 1：NHI 匯入 + GET + DELETE）
-GET    /health-records
-GET    /health-records/{id}                      -- 含同 health_record_id 的 medications + lab_results
-DELETE /health-records/{id}                      -- 僅 source='nhi_import'
+### 檢驗項目維護
+```
+GET    /user-lab-items                    -- 依 category 分組
+POST   /user-lab-items
+PUT    /user-lab-items/{id}               -- is_preset=true 僅改 normal_min/max
+DELETE /user-lab-items/{id}               -- is_preset=true 回傳 400
+```
 
--- 用藥（Phase 1：NHI 匯入 + GET + DELETE）
+### 回診紀錄
+```
+GET    /visits
+GET    /visits/{id}                       -- 含關聯用藥
+POST   /visits
+PUT    /visits/{id}
+DELETE /visits/{id}
+```
+
+### 用藥紀錄
+```
 GET    /medications
-GET    /medications/current              -- 最近一次就診的藥品（drug_type='medication'）
-DELETE /medications/{id}                 -- 僅 source='nhi_import'
-
--- NHI 匯入
-POST   /nhi/import                       -- 新蓋舊，r1 + r1_1 + r7
-GET    /nhi/import/logs
-DELETE /nhi/import/{logId}               -- 撤銷，依 nhi_import_log_id 清除
-```
-
-### Phase 2 新增
-
-```
-POST   /health-records
-PUT    /health-records/{id}
-DELETE /health-records/{id}                      -- 開放 source='manual'
-GET    /health-records/{id}/summary
-
+GET    /medications/{id}
 POST   /medications
 PUT    /medications/{id}
-DELETE /medications/{id}                 -- 開放 source='manual'
-POST   /medications/{id}/reminders
+DELETE /medications/{id}
+GET    /medications/active                -- Phase 2
+```
+
+### NHI 匯入
+```
+POST   /nhi/import
+GET    /nhi/import-logs
+DELETE /nhi/import-logs/{id}              -- 撤銷匯入
+```
+
+### Phase 2（預留）
+```
+GET/POST/PUT/DELETE /symptoms
+GET    /symptoms/summary
+GET/POST/PUT/DELETE /medication-reminders
+GET    /visits/{id}/summary
 ```
 
 ---
 
-## 目錄結構
+## 關鍵設計決策
 
-```
-HealthRecord.API/
-├── Controllers/
-│   ├── AuthController.cs
-│   ├── ProfileController.cs
-│   ├── BloodPressureController.cs
-│   ├── LabController.cs
-│   ├── HealthRecordController.cs         ← Phase 1: GET + DELETE
-│   ├── MedicationController.cs    ← Phase 1: GET + DELETE
-│   └── NhiController.cs
-├── Services/
-│   ├── Interfaces/
-│   ├── AuthService.cs
-│   ├── ProfileService.cs
-│   ├── BloodPressureService.cs
-│   ├── LabService.cs
-│   ├── HealthRecordService.cs
-│   ├── MedicationService.cs
-│   └── NhiImportService.cs
-├── Models/
-│   ├── Entities/
-│   │   ├── User.cs
-│   │   ├── EmergencyContact.cs
-│   │   ├── HealthRecord.cs        ← 看診主表（含診斷欄位）
-│   │   ├── BloodPressureDetail.cs
-│   │   ├── LabResultDetail.cs     ← 含項目定義欄位
-│   │   ├── MedicationDetail.cs
-│   │   └── NhiImportLog.cs
-│   └── DTOs/
-│       ├── Auth/ Profile/ BloodPressure/ Lab/ HealthRecord/ Medication/ Nhi/
-│       └── Common/ApiResponse.cs
-├── Infrastructure/Data/
-│   ├── AppDbContext.cs
-│   └── Migrations/
-└── Common/
-    ├── Constants/LabItemPresets.cs
-    ├── Middleware/ExceptionMiddleware.cs
-    └── Helpers/
-        ├── JwtHelper.cs
-        └── NhiJsonParser.cs
-```
+1. **HealthRecords + Detail 子表**：統一時間軸、統一 source 追蹤，新類型只加子表。
+2. **item_code(r7.8) + item_name(r7.10) 聯合唯一**：同一 09015C 下有 CRE(肌酸酐) 和 eGFR。
+3. **定量/定性分離**：is_numeric + value_numeric + value_text 三欄位。
+4. **r1_1 是混合醫令**：藥品 + 檢驗 + 診察費，依代碼格式分類。
+5. **r7 有重複**：NHI 系統問題，匯入 dedup by (date+code+name+value)。
+6. **r1.12/r1.13 不是診斷**：是部分負擔和費用，診斷 3 從 r1.14 開始。
+7. **全形/半形混用**：＆/& 混用，比對時正規化。
+8. **nhi_import_log_id FK**：HealthRecords 直接關聯匯入批次，撤銷時批次查詢。
 
 ---
 
-## 常見查詢範例
+## 重構 Prompt（給 Claude Code 使用）
 
-```csharp
-// 查某使用者的所有血壓（不需要任何 join）
-var bp = await context.BloodPressureDetails
-    .Where(b => b.UserId == userId)
-    .OrderByDescending(b => b.RecordedAt)
-    .ToListAsync();
+從既有的 Phase 1 專案重構到 v2 架構。不是從頭建，是調整既有程式碼。
 
-// 查某次看診的所有用藥
-var meds = await context.MedicationDetails
-    .Where(m => m.HealthRecordId == healthRecordId && m.DrugType == "medication")
-    .ToListAsync();
-
-// 查某個指標的趨勢（不需要 join LabItemDefinitions）
-var trend = await context.LabResultDetails
-    .Where(l => l.UserId == userId
-             && l.ItemCode == "Cr"
-             && l.IsNumeric
-             && l.ValueNumeric != null)
-    .OrderBy(l => l.RecordedAt)
-    .ToListAsync();
-
-// 查某次 NHI 匯入的所有資料（三張表各自查，不 join）
-var healthRecords = await context.HealthRecords
-    .Where(h => h.NhiImportLogId == logId).ToListAsync();
-var labs = await context.LabResultDetails
-    .Where(l => l.NhiImportLogId == logId).ToListAsync();
-var meds = await context.MedicationDetails
-    .Where(m => m.NhiImportLogId == logId).ToListAsync();
 ```
+我已將 CLAUDE.md 更新為 v2 版本。請閱讀完整內容後進行以下重構：
 
----
+## 資料庫重構
 
-## 程式碼慣例
-- C#，async/await 全面非同步
-- 無全域 LabItemDefinitions 表，項目定義存在 LabResultDetails 每筆資料中
-- 前端常用項目清單從 `LabItemPresets` 常數取得，不需要 API
-- NHI 匯入整批 Transaction，新蓋舊，失敗完整 rollback
-- PUT / DELETE 血壓與檢驗只允許 `source='manual'`
-- DELETE 看診 / 用藥：Phase 1 只允許 `source='nhi_import'`
+1. 刪除 Migrations/ 資料夾下所有既有 migration 檔案
+2. 依照新 CLAUDE.md Schema 調整所有 Entity：
+   - 新增 UserLabItems Entity
+   - LabResultDetails：移除舊的 item_code/item_name/nhi_code/nhi_item_name，
+     改為新的 item_code(=r7.8) + item_name(=r7.10) + nhi_order_name(=r7.9) + nhi_raw_value(=r7.11)
+   - VisitDetails：新增多診斷欄位(diagnosis_code_1~5/name_1~5)、
+     copayment_code(r1.12)、medical_cost(r1.13)、visit_type_code(r1.1)
+   - MedicationDetails：新增 nhi_drug_code、quantity、copayment、visit_detail_id FK
+   - HealthRecords：新增 nhi_import_log_id FK
+   - NhiImportLogs：新增 skipped_lab_count、duplicate_lab_count
+3. 更新 AppDbContext（OnModelCreating 設定 indexes、relationships）
+4. 重建初始 Migration：dotnet ef migrations add 20260403_InitialCreate
+
+## 新增功能
+
+5. 新增 UserLabItemController（CRUD）
+   - GET /user-lab-items（依 category 分組）
+   - POST/PUT/DELETE（is_preset=true 禁止刪除、僅改 normal_min/max）
+6. 修改 AuthService.RegisterAsync：新使用者自動初始化預設 UserLabItems
+7. 新增 DbSeeder：四個測試帳號 + 對應的測試資料（血壓、檢驗、回診、用藥）
+
+## NHI 匯入重構
+
+8. 修改 NhiImportService：
+   - JSON 編碼改為 utf-8-sig
+   - r1_1 分類邏輯：藥品(10碼A/B/C/N) vs 檢驗醫令(≤6碼06~12) vs 診察費(00~05)
+   - r7 去重：(date+code+name+value) 重複的只取第一筆
+   - r7 過濾：Appearance/顏色/混濁度/GENERAL URINE EXAMINATION → 跳過
+   - item_name 比對全形/半形正規化
+   - 查 UserLabItems 取代舊的 LabItemPresets 常數比對
+   - 找不到的項目自動新增到 UserLabItems
+   - HealthRecords 填入 nhi_import_log_id
+   - 同日多筆 r1 合併為同一 VisitDetails
+9. 移除 LabItemPresets 常數檔案
+
+## 既有功能調整
+
+10. LabController /trend 端點：查詢參數改為 itemCode + itemName
+11. 移除舊的 LabItemPresets 相關引用
+
+## 完成後
+
+12. 確認 dotnet build 無錯誤
+13. 確認 Migration 可正常 apply（dotnet ef database update）
+14. 確認 Seed 可正常執行且冪等
+15. 更新 CLAUDE.md 的進度 checkbox
+```

@@ -72,6 +72,7 @@ try
     builder.Services.AddScoped<IMedicationService, MedicationService>();
     builder.Services.AddScoped<INhiImportService, NhiImportService>();
     builder.Services.AddScoped<IUserLabItemService, UserLabItemService>();
+    builder.Services.AddScoped<IVisitService, VisitService>();
 
     // Swagger (dev only)
     builder.Services.AddEndpointsApiExplorer();
@@ -79,13 +80,23 @@ try
 
     var app = builder.Build();
 
-    // Auto-apply migrations (Zeabur 部署時自動執行，本地 Development 跳過)
+    // Auto-apply migrations (Zeabur 部署時自動執行，本地 Development ���過)
     if (!app.Environment.IsDevelopment())
     {
         using var scope = app.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         dbContext.Database.Migrate();
     }
+
+    // Seed test data (Development only, idempotent)
+    if (app.Environment.IsDevelopment())
+    {
+        using var scope = app.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await DbSeeder.SeedAsync(dbContext);
+    }
+
+    app.UseCors("Dev"); // Must be before auth middleware for preflight OPTIONS
 
     app.UseMiddleware<ExceptionMiddleware>();
 
@@ -95,14 +106,12 @@ try
         app.UseSwaggerUI();
     }
 
-    app.UseCors("Dev");
-
     app.UseSerilogRequestLogging();
     app.UseAuthentication();
     app.UseAuthorization();
     app.MapControllers();
 
-    app.Run();
+    await app.RunAsync();
 }
 catch (Exception ex) when (ex is not HostAbortedException)
 {

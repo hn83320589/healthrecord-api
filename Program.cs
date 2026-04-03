@@ -19,19 +19,27 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
+    // Zeabur 透過 PORT 環境變數指定 port
+    var port = Environment.GetEnvironmentVariable("PORT");
+    if (port != null)
+        builder.WebHost.UseUrls($"http://+:{port}");
+
     // Serilog
     builder.Host.UseSerilog((ctx, lc) => lc
         .ReadFrom.Configuration(ctx.Configuration)
         .WriteTo.Console()
         .Enrich.FromLogContext());
 
+    // CORS — 從設定檔或環境變數讀取允許的 origins
+    var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+        ?? ["http://localhost:5173"];
     builder.Services.AddCors(options =>
-  {
-      options.AddPolicy("Dev", policy =>
-          policy.WithOrigins("http://localhost:5173")
-                .AllowAnyHeader()
-                .AllowAnyMethod());
-  });
+    {
+        options.AddPolicy("AllowFrontend", policy =>
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod());
+    });
 
     // Database
     var connStr = builder.Configuration.GetConnectionString("DefaultConnection")!;
@@ -96,7 +104,7 @@ try
         await DbSeeder.SeedAsync(dbContext);
     }
 
-    app.UseCors("Dev"); // Must be before auth middleware for preflight OPTIONS
+    app.UseCors("AllowFrontend"); // Must be before auth middleware for preflight OPTIONS
 
     app.UseMiddleware<ExceptionMiddleware>();
 

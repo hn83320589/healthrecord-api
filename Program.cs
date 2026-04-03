@@ -42,7 +42,9 @@ try
     });
 
     // Database
-    var connStr = builder.Configuration.GetConnectionString("DefaultConnection")!;
+    var connStr = builder.Configuration.GetConnectionString("DefaultConnection")
+        ?? throw new InvalidOperationException(
+            "Missing ConnectionStrings:DefaultConnection. Set env var ConnectionStrings__DefaultConnection");
     builder.Services.AddDbContext<AppDbContext>(options =>
         options.UseMySql(connStr, new MySqlServerVersion(new Version(8, 0, 0))));
 

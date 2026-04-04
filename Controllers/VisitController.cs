@@ -1,5 +1,6 @@
 using HealthRecord.API.Models.DTOs.Common;
 using HealthRecord.API.Models.DTOs.Visit;
+using HealthRecord.API.Models.DTOs.VisitSummary;
 using HealthRecord.API.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,7 +9,10 @@ namespace HealthRecord.API.Controllers;
 
 [Authorize]
 [Route("visits")]
-public class VisitController(IVisitService service, IVisitRelationService relation) : BaseController
+public class VisitController(
+    IVisitService service,
+    IVisitRelationService relation,
+    IVisitSummaryService summary) : BaseController
 {
     [HttpGet]
     public async Task<ActionResult<ApiResponse<PagedResult<VisitResponse>>>> GetList(
@@ -60,5 +64,28 @@ public class VisitController(IVisitService service, IVisitRelationService relati
     {
         var result = await relation.GetTimelineAsync(CurrentUserId, startDate, endDate);
         return Ok(ApiResponse<List<VisitTimelineItemDto>>.Ok(result));
+    }
+
+    [HttpGet("{id}/summary-pdf")]
+    public async Task<IActionResult> GetSummaryPdf(int id)
+    {
+        var pdfBytes = await summary.GeneratePdfAsync(CurrentUserId, id);
+        return File(pdfBytes, "application/pdf", $"visit-summary-{id}.pdf");
+    }
+
+    [HttpGet("latest-summary-pdf")]
+    public async Task<IActionResult> GetLatestSummaryPdf()
+    {
+        var visitId = await summary.GetLatestVisitIdAsync(CurrentUserId)
+            ?? throw new KeyNotFoundException("No visits found.");
+        var pdfBytes = await summary.GeneratePdfAsync(CurrentUserId, visitId);
+        return File(pdfBytes, "application/pdf", "visit-summary-latest.pdf");
+    }
+
+    [HttpGet("{id}/summary-json")]
+    public async Task<ActionResult<ApiResponse<VisitSummaryJsonResponse>>> GetSummaryJson(int id)
+    {
+        var result = await summary.GetSummaryJsonAsync(CurrentUserId, id);
+        return Ok(ApiResponse<VisitSummaryJsonResponse>.Ok(result));
     }
 }

@@ -9,7 +9,10 @@ using HealthRecord.API.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using QuestPDF.Infrastructure;
 using Serilog;
+
+QuestPDF.Settings.License = LicenseType.Community;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
@@ -87,6 +90,7 @@ try
     builder.Services.AddScoped<ISymptomService, SymptomService>();
     builder.Services.AddScoped<IMedicationReminderService, MedicationReminderService>();
     builder.Services.AddScoped<IMedicationLogService, MedicationLogService>();
+    builder.Services.AddScoped<IVisitSummaryService, VisitSummaryService>();
 
     // Swagger (dev only)
     builder.Services.AddEndpointsApiExplorer();

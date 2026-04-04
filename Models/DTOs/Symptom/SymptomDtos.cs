@@ -32,14 +32,14 @@ public record UpdateSymptomRequest(
 // ── Summary ──────────────────────────────────────────
 
 public record SymptomSummaryResponse(
-    PeriodDto Period,
+    SymptomPeriodDto Period,
     int TotalCount,
     List<TypeStatDto> ByType,
     List<WeekTrendDto> SeverityTrend,
     List<string> TopTriggers,
     List<CalendarDayDto> Calendar);
 
-public record PeriodDto(DateOnly Start, DateOnly End);
+public record SymptomPeriodDto(DateOnly Start, DateOnly End);
 public record TypeStatDto(string Type, int Count, double AvgSeverity);
 public record WeekTrendDto(string Week, double AvgSeverity);
 public record CalendarDayDto(DateOnly Date, int Count, int MaxSeverity);

@@ -134,7 +134,7 @@ public class SymptomService(AppDbContext db) : ISymptomService
             .ToList();
 
         return new SymptomSummaryResponse(
-            new PeriodDto(DateOnly.FromDateTime(start), DateOnly.FromDateTime(end)),
+            new SymptomPeriodDto(DateOnly.FromDateTime(start), DateOnly.FromDateTime(end)),
             logs.Count, byType, severityTrend, topTriggers, calendar);
     }
 

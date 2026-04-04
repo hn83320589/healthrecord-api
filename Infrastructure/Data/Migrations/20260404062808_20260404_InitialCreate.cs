@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace HealthRecord.API.Infrastructure.Data.Migrations
 {
     /// <inheritdoc />
-    public partial class _20260403_InitialCreate : Migration
+    public partial class _20260404_InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -116,6 +116,38 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
+                name: "SymptomLogs",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    UserId = table.Column<int>(type: "int", nullable: false),
+                    LoggedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false),
+                    SymptomType = table.Column<string>(type: "varchar(255)", nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Severity = table.Column<int>(type: "int", nullable: false),
+                    BodyLocation = table.Column<string>(type: "longtext", nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    DurationMinutes = table.Column<int>(type: "int", nullable: true),
+                    Triggers = table.Column<string>(type: "longtext", nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Note = table.Column<string>(type: "longtext", nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    CreatedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_SymptomLogs", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_SymptomLogs_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                })
+                .Annotation("MySql:CharSet", "utf8mb4");
+
+            migrationBuilder.CreateTable(
                 name: "UserLabItems",
                 columns: table => new
                 {
@@ -200,6 +232,7 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    UserId = table.Column<int>(type: "int", nullable: false),
                     HealthRecordId = table.Column<int>(type: "int", nullable: false),
                     Systolic = table.Column<int>(type: "int", nullable: false),
                     Diastolic = table.Column<int>(type: "int", nullable: false),
@@ -207,8 +240,7 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                     MeasurementPosition = table.Column<string>(type: "longtext", nullable: true)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     Arm = table.Column<string>(type: "longtext", nullable: true)
-                        .Annotation("MySql:CharSet", "utf8mb4"),
-                    UserId = table.Column<int>(type: "int", nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4")
                 },
                 constraints: table =>
                 {
@@ -223,7 +255,8 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                         name: "FK_BloodPressureDetails_Users_UserId",
                         column: x => x.UserId,
                         principalTable: "Users",
-                        principalColumn: "Id");
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
@@ -233,6 +266,7 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    UserId = table.Column<int>(type: "int", nullable: false),
                     HealthRecordId = table.Column<int>(type: "int", nullable: false),
                     UserLabItemId = table.Column<int>(type: "int", nullable: true),
                     ItemCode = table.Column<string>(type: "varchar(255)", nullable: false)
@@ -250,8 +284,7 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                     NhiOrderName = table.Column<string>(type: "longtext", nullable: true)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     NhiRawValue = table.Column<string>(type: "longtext", nullable: true)
-                        .Annotation("MySql:CharSet", "utf8mb4"),
-                    UserId = table.Column<int>(type: "int", nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4")
                 },
                 constraints: table =>
                 {
@@ -272,7 +305,8 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                         name: "FK_LabResultDetails_Users_UserId",
                         column: x => x.UserId,
                         principalTable: "Users",
-                        principalColumn: "Id");
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
@@ -282,6 +316,7 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    UserId = table.Column<int>(type: "int", nullable: false),
                     HealthRecordId = table.Column<int>(type: "int", nullable: false),
                     VisitType = table.Column<string>(type: "longtext", nullable: true)
                         .Annotation("MySql:CharSet", "utf8mb4"),
@@ -326,6 +361,12 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                         principalTable: "HealthRecords",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_VisitDetails_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
@@ -335,6 +376,7 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    UserId = table.Column<int>(type: "int", nullable: false),
                     HealthRecordId = table.Column<int>(type: "int", nullable: false),
                     VisitDetailId = table.Column<int>(type: "int", nullable: true),
                     MedicationName = table.Column<string>(type: "longtext", nullable: false)
@@ -354,8 +396,7 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                     DurationDays = table.Column<int>(type: "int", nullable: true),
                     IsActive = table.Column<bool>(type: "tinyint(1)", nullable: false),
                     StartDate = table.Column<DateOnly>(type: "date", nullable: true),
-                    EndDate = table.Column<DateOnly>(type: "date", nullable: true),
-                    UserId = table.Column<int>(type: "int", nullable: true)
+                    EndDate = table.Column<DateOnly>(type: "date", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -370,7 +411,8 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                         name: "FK_MedicationDetails_Users_UserId",
                         column: x => x.UserId,
                         principalTable: "Users",
-                        principalColumn: "Id");
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_MedicationDetails_VisitDetails_VisitDetailId",
                         column: x => x.VisitDetailId,
@@ -453,6 +495,16 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "idx_symptom_user_date",
+                table: "SymptomLogs",
+                columns: new[] { "UserId", "LoggedAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "idx_symptom_user_type",
+                table: "SymptomLogs",
+                columns: new[] { "UserId", "SymptomType" });
+
+            migrationBuilder.CreateIndex(
                 name: "uq_user_item",
                 table: "UserLabItems",
                 columns: new[] { "UserId", "ItemCode", "ItemName" },
@@ -469,6 +521,11 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                 table: "VisitDetails",
                 column: "HealthRecordId",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_VisitDetails_UserId",
+                table: "VisitDetails",
+                column: "UserId");
         }
 
         /// <inheritdoc />
@@ -485,6 +542,9 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
 
             migrationBuilder.DropTable(
                 name: "MedicationDetails");
+
+            migrationBuilder.DropTable(
+                name: "SymptomLogs");
 
             migrationBuilder.DropTable(
                 name: "UserLabItems");

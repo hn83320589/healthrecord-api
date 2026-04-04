@@ -18,24 +18,29 @@ public static class DbSeeder
     private static async Task SeedUser(AppDbContext db, string email, string name, string? chronic,
         DateOnly? birth, Func<AppDbContext, int, Task> seedData)
     {
-        var existing = await db.Users.FirstOrDefaultAsync(u => u.Email == email);
-        if (existing != null) return; // idempotent
-
-        var user = new User
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email);
+        if (user == null)
         {
-            Email = email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Test1234!"),
-            DisplayName = name,
-            BirthDate = birth,
-            ChronicConditions = chronic,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-        db.Users.Add(user);
-        await db.SaveChangesAsync();
+            user = new User
+            {
+                Email = email,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Test1234!"),
+                DisplayName = name,
+                BirthDate = birth,
+                ChronicConditions = chronic,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            db.Users.Add(user);
+            await db.SaveChangesAsync();
 
-        db.UserLabItems.AddRange(LabItemDefaults.CreatePresetsForUser(user.Id));
-        await db.SaveChangesAsync();
+            db.UserLabItems.AddRange(LabItemDefaults.CreatePresetsForUser(user.Id));
+            await db.SaveChangesAsync();
+        }
+
+        // Skip if seed data already complete (visits exist for accounts that should have them)
+        var hrCount = await db.HealthRecords.CountAsync(h => h.UserId == user.Id);
+        if (hrCount > 10) return; // already seeded
 
         await seedData(db, user.Id);
     }
@@ -58,6 +63,7 @@ public static class DbSeeder
         {
             db.BloodPressureDetails.Add(new BloodPressureDetail
             {
+                UserId = userId,
                 HealthRecordId = records[i].Id,
                 Systolic = items[i].sys,
                 Diastolic = items[i].dia,
@@ -106,11 +112,11 @@ public static class DbSeeder
             await db.SaveChangesAsync();
 
             db.LabResultDetails.AddRange([
-                new() { HealthRecordId = rec.Id, ItemCode = "09015C", ItemName = "CRE(肌酸酐)", IsNumeric = true, ValueNumeric = crVals[i], Unit = "mg/dL" },
-                new() { HealthRecordId = rec.Id, ItemCode = "09015C", ItemName = "eGFR", IsNumeric = true, ValueNumeric = egfrVals[i], Unit = "mL/min/1.73m²" },
-                new() { HealthRecordId = rec.Id, ItemCode = "12034B", ItemName = "C3", IsNumeric = true, ValueNumeric = 65m + i * 4, Unit = "mg/dL" },
-                new() { HealthRecordId = rec.Id, ItemCode = "12038B", ItemName = "C4", IsNumeric = true, ValueNumeric = 10m + i * 2, Unit = "mg/dL" },
-                new() { HealthRecordId = rec.Id, ItemCode = "08011C", ItemName = "Hemoglobin 血色素", IsNumeric = true, ValueNumeric = 10.5m + i * 0.2m, Unit = "g/dL" },
+                new() { UserId = userId, HealthRecordId = rec.Id, ItemCode = "09015C", ItemName = "CRE(肌酸酐)", IsNumeric = true, ValueNumeric = crVals[i], Unit = "mg/dL" },
+                new() { UserId = userId, HealthRecordId = rec.Id, ItemCode = "09015C", ItemName = "eGFR", IsNumeric = true, ValueNumeric = egfrVals[i], Unit = "mL/min/1.73m²" },
+                new() { UserId = userId, HealthRecordId = rec.Id, ItemCode = "12034B", ItemName = "C3", IsNumeric = true, ValueNumeric = 65m + i * 4, Unit = "mg/dL" },
+                new() { UserId = userId, HealthRecordId = rec.Id, ItemCode = "12038B", ItemName = "C4", IsNumeric = true, ValueNumeric = 10m + i * 2, Unit = "mg/dL" },
+                new() { UserId = userId, HealthRecordId = rec.Id, ItemCode = "08011C", ItemName = "Hemoglobin 血色素", IsNumeric = true, ValueNumeric = 10.5m + i * 0.2m, Unit = "g/dL" },
             ]);
         }
         await db.SaveChangesAsync();
@@ -130,7 +136,8 @@ public static class DbSeeder
 
             var vd = new VisitDetail
             {
-                HealthRecordId = vRec.Id, DiagnosisCode1 = "M32", DiagnosisName1 = "系統性紅斑狼瘡",
+                UserId = userId, HealthRecordId = vRec.Id,
+                DiagnosisCode1 = "M32", DiagnosisName1 = "系統性紅斑狼瘡",
                 DiagnosisCode2 = "N03.2", DiagnosisName2 = "慢性腎絲球腎炎"
             };
             db.VisitDetails.Add(vd);
@@ -149,11 +156,70 @@ public static class DbSeeder
             {
                 db.MedicationDetails.Add(new MedicationDetail
                 {
-                    HealthRecordId = medRecs[j].Id, VisitDetailId = vd.Id,
+                    UserId = userId, HealthRecordId = medRecs[j].Id, VisitDetailId = vd.Id,
                     MedicationName = meds[j], Quantity = 28, DurationDays = 28
                 });
             }
         }
+        await db.SaveChangesAsync();
+
+        // Symptoms: 3 months of logs
+        var symptomRng = new Random(99);
+        var triggers = new[] { "睡眠不足", "天氣變化", "工作壓力", "經期前" };
+        var symptomLogs = new List<SymptomLog>();
+
+        for (int w = 12; w >= 0; w--)
+        {
+            var weekStart = now.AddDays(-w * 7);
+            // 疲倦 2-3 times/week
+            for (int j = 0; j < 2 + symptomRng.Next(0, 2); j++)
+            {
+                symptomLogs.Add(new SymptomLog
+                {
+                    UserId = userId,
+                    LoggedAt = weekStart.AddDays(symptomRng.Next(0, 7)).Date.AddHours(20 + symptomRng.Next(0, 3)),
+                    SymptomType = "疲倦", Severity = 3 + symptomRng.Next(0, 4),
+                    Triggers = triggers[symptomRng.Next(triggers.Length)],
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            // 關節痛 1-2 times/week
+            for (int j = 0; j < 1 + symptomRng.Next(0, 2); j++)
+            {
+                symptomLogs.Add(new SymptomLog
+                {
+                    UserId = userId,
+                    LoggedAt = weekStart.AddDays(symptomRng.Next(0, 7)).Date.AddHours(14 + symptomRng.Next(0, 6)),
+                    SymptomType = "關節痛", Severity = 4 + symptomRng.Next(0, 4),
+                    BodyLocation = symptomRng.Next(2) == 0 ? "雙膝" : "手指關節",
+                    Triggers = symptomRng.Next(3) == 0 ? "天氣變化" : null,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            // 水腫 occasional
+            if (w % 3 == 0)
+            {
+                symptomLogs.Add(new SymptomLog
+                {
+                    UserId = userId,
+                    LoggedAt = weekStart.AddDays(symptomRng.Next(0, 3)).Date.AddHours(18),
+                    SymptomType = "水腫", Severity = 2 + symptomRng.Next(0, 3),
+                    BodyLocation = "腳踝", CreatedAt = DateTime.UtcNow
+                });
+            }
+            // 掉髮 occasional
+            if (w % 4 == 0)
+            {
+                symptomLogs.Add(new SymptomLog
+                {
+                    UserId = userId,
+                    LoggedAt = weekStart.AddDays(symptomRng.Next(0, 7)).Date.AddHours(8),
+                    SymptomType = "掉髮", Severity = 2 + symptomRng.Next(0, 2),
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+        }
+        db.SymptomLogs.AddRange(symptomLogs);
         await db.SaveChangesAsync();
     }
 
@@ -171,26 +237,49 @@ public static class DbSeeder
         }).ToList();
         await AddBpBatch(db, userId, bpItems);
 
-        foreach (var daysAgo in new[] { -365, -270, -180, -30 })
+        // Labs: 2 per year (renal + lipid panel for HTN)
+        var crVals = new[] { 1.0m, 0.95m, 1.05m, 0.98m };
+        foreach (var (daysAgo, i) in new[] { -365, -270, -180, -30 }.Select((v, i) => (v, i)))
         {
-            var at = now.AddDays(daysAgo).Date.AddHours(10);
+            var at = now.AddDays(daysAgo).Date.AddHours(9);
+
+            // Lab
+            var labRec = new HealthRecordEntity
+            {
+                UserId = userId, RecordType = "lab_result", RecordedAt = at,
+                Source = "manual", NhiInstitution = "台北長庚", NhiInstitutionCode = "1301010014",
+                CreatedAt = at, UpdatedAt = at
+            };
+            db.HealthRecords.Add(labRec);
+            await db.SaveChangesAsync();
+            db.LabResultDetails.AddRange([
+                new() { UserId = userId, HealthRecordId = labRec.Id, ItemCode = "09015C", ItemName = "CRE(肌酸酐)", IsNumeric = true, ValueNumeric = crVals[i], Unit = "mg/dL" },
+                new() { UserId = userId, HealthRecordId = labRec.Id, ItemCode = "09015C", ItemName = "eGFR", IsNumeric = true, ValueNumeric = 85m + i * 2, Unit = "mL/min/1.73m²" },
+                new() { UserId = userId, HealthRecordId = labRec.Id, ItemCode = "09001C", ItemName = "總膽固醇", IsNumeric = true, ValueNumeric = 210m - i * 5, Unit = "mg/dL" },
+                new() { UserId = userId, HealthRecordId = labRec.Id, ItemCode = "09004C", ItemName = "三酸甘油脂 TG", IsNumeric = true, ValueNumeric = 165m - i * 10, Unit = "mg/dL" },
+            ]);
+
+            // Visit
+            var vAt = at.AddHours(1);
             var vRec = new HealthRecordEntity
             {
-                UserId = userId, RecordType = "visit", RecordedAt = at,
-                Source = "manual", NhiInstitution = "台北長庚", CreatedAt = at, UpdatedAt = at
+                UserId = userId, RecordType = "visit", RecordedAt = vAt,
+                Source = "manual", NhiInstitution = "台北長庚", NhiInstitutionCode = "1301010014",
+                CreatedAt = vAt, UpdatedAt = vAt
             };
             db.HealthRecords.Add(vRec);
             await db.SaveChangesAsync();
 
-            var vd = new VisitDetail { HealthRecordId = vRec.Id, DiagnosisCode1 = "I10", DiagnosisName1 = "原發性高血壓" };
+            var vd = new VisitDetail { UserId = userId, HealthRecordId = vRec.Id, DiagnosisCode1 = "I10", DiagnosisName1 = "原發性高血壓" };
             db.VisitDetails.Add(vd);
             await db.SaveChangesAsync();
 
+            // Meds
             var medNames = daysAgo < -200 ? new[] { "脈優錠5mg" } : new[] { "脈優錠5mg", "得安穩10mg" };
             var mRecs = medNames.Select(m => new HealthRecordEntity
             {
-                UserId = userId, RecordType = "medication", RecordedAt = at,
-                Source = "manual", CreatedAt = at, UpdatedAt = at
+                UserId = userId, RecordType = "medication", RecordedAt = vAt,
+                Source = "manual", CreatedAt = vAt, UpdatedAt = vAt
             }).ToList();
             db.HealthRecords.AddRange(mRecs);
             await db.SaveChangesAsync();
@@ -198,7 +287,7 @@ public static class DbSeeder
             for (int j = 0; j < mRecs.Count; j++)
                 db.MedicationDetails.Add(new MedicationDetail
                 {
-                    HealthRecordId = mRecs[j].Id, VisitDetailId = vd.Id,
+                    UserId = userId, HealthRecordId = mRecs[j].Id, VisitDetailId = vd.Id,
                     MedicationName = medNames[j], DurationDays = 28
                 });
         }
@@ -235,8 +324,8 @@ public static class DbSeeder
             db.HealthRecords.Add(labRec);
             await db.SaveChangesAsync();
             db.LabResultDetails.AddRange([
-                new() { HealthRecordId = labRec.Id, ItemCode = "09006C", ItemName = "醣化血色素", IsNumeric = true, ValueNumeric = hba1cVals[i], Unit = "%" },
-                new() { HealthRecordId = labRec.Id, ItemCode = "09005C", ItemName = "飯前血糖 Glucose", IsNumeric = true, ValueNumeric = 130m - i * 10, Unit = "mg/dL" },
+                new() { UserId = userId, HealthRecordId = labRec.Id, ItemCode = "09006C", ItemName = "醣化血色素", IsNumeric = true, ValueNumeric = hba1cVals[i], Unit = "%" },
+                new() { UserId = userId, HealthRecordId = labRec.Id, ItemCode = "09005C", ItemName = "飯前血糖 Glucose", IsNumeric = true, ValueNumeric = 130m - i * 10, Unit = "mg/dL" },
             ]);
 
             // Visit
@@ -247,7 +336,7 @@ public static class DbSeeder
             };
             db.HealthRecords.Add(vRec);
             await db.SaveChangesAsync();
-            var vd = new VisitDetail { HealthRecordId = vRec.Id, DiagnosisCode1 = "E11", DiagnosisName1 = "第二型糖尿病" };
+            var vd = new VisitDetail { UserId = userId, HealthRecordId = vRec.Id, DiagnosisCode1 = "E11", DiagnosisName1 = "第二型糖尿病" };
             db.VisitDetails.Add(vd);
             await db.SaveChangesAsync();
 
@@ -262,10 +351,26 @@ public static class DbSeeder
             for (int j = 0; j < mRecs.Count; j++)
                 db.MedicationDetails.Add(new MedicationDetail
                 {
-                    HealthRecordId = mRecs[j].Id, VisitDetailId = vd.Id,
+                    UserId = userId, HealthRecordId = mRecs[j].Id, VisitDetailId = vd.Id,
                     MedicationName = j == 0 ? "Metformin 500mg" : "Glimepiride 2mg", DurationDays = 28
                 });
         }
+        await db.SaveChangesAsync();
+
+        // DM symptoms: occasional dizziness
+        var dmRng = new Random(55);
+        var dmSymptoms = new List<SymptomLog>();
+        for (int w = 8; w >= 0; w -= 2)
+        {
+            dmSymptoms.Add(new SymptomLog
+            {
+                UserId = userId,
+                LoggedAt = now.AddDays(-w * 7).Date.AddHours(10 + dmRng.Next(0, 4)),
+                SymptomType = "頭暈", Severity = 3 + dmRng.Next(0, 2),
+                Triggers = "低血糖", CreatedAt = DateTime.UtcNow
+            });
+        }
+        db.SymptomLogs.AddRange(dmSymptoms);
         await db.SaveChangesAsync();
     }
 
@@ -292,10 +397,10 @@ public static class DbSeeder
         db.HealthRecords.Add(labRec);
         await db.SaveChangesAsync();
         db.LabResultDetails.AddRange([
-            new() { HealthRecordId = labRec.Id, ItemCode = "09015C", ItemName = "CRE(肌酸酐)", IsNumeric = true, ValueNumeric = 0.9m, Unit = "mg/dL" },
-            new() { HealthRecordId = labRec.Id, ItemCode = "09015C", ItemName = "eGFR", IsNumeric = true, ValueNumeric = 105m, Unit = "mL/min/1.73m²" },
-            new() { HealthRecordId = labRec.Id, ItemCode = "09005C", ItemName = "飯前血糖 Glucose", IsNumeric = true, ValueNumeric = 88m, Unit = "mg/dL" },
-            new() { HealthRecordId = labRec.Id, ItemCode = "09001C", ItemName = "總膽固醇", IsNumeric = true, ValueNumeric = 185m, Unit = "mg/dL" },
+            new() { UserId = userId, HealthRecordId = labRec.Id, ItemCode = "09015C", ItemName = "CRE(肌酸酐)", IsNumeric = true, ValueNumeric = 0.9m, Unit = "mg/dL" },
+            new() { UserId = userId, HealthRecordId = labRec.Id, ItemCode = "09015C", ItemName = "eGFR", IsNumeric = true, ValueNumeric = 105m, Unit = "mL/min/1.73m²" },
+            new() { UserId = userId, HealthRecordId = labRec.Id, ItemCode = "09005C", ItemName = "飯前血糖 Glucose", IsNumeric = true, ValueNumeric = 88m, Unit = "mg/dL" },
+            new() { UserId = userId, HealthRecordId = labRec.Id, ItemCode = "09001C", ItemName = "總膽固醇", IsNumeric = true, ValueNumeric = 185m, Unit = "mg/dL" },
         ]);
         await db.SaveChangesAsync();
     }

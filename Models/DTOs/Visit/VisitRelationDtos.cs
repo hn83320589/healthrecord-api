@@ -1,3 +1,5 @@
+using HealthRecord.API.Models.DTOs.Symptom;
+
 namespace HealthRecord.API.Models.DTOs.Visit;
 
 // ── GET /visits/{id}/related ──────────────────────────────────
@@ -7,6 +9,7 @@ public record VisitRelatedResponse(
     List<VisitMedicationDto> Medications,
     List<LabResultWithStatusDto> LabResults,
     List<BloodPressureWithDateDto> BloodPressures,
+    List<SymptomNearVisitDto> Symptoms,
     VisitSummaryDto Summary);
 
 public record VisitInfoDto(
@@ -62,7 +65,8 @@ public record VisitSummaryDto(
     int MedicationCount,
     int BpCount,
     int? BpAvgSystolic,
-    int? BpAvgDiastolic);
+    int? BpAvgDiastolic,
+    int SymptomCount);
 
 // ── GET /visits/timeline ──────────────────────────────────────
 

@@ -3,6 +3,7 @@ namespace HealthRecord.API.Models.Entities;
 public class MedicationDetail
 {
     public int Id { get; set; }
+    public int UserId { get; set; }
     public int HealthRecordId { get; set; }          // FK → HealthRecords (many:1)
     public int? VisitDetailId { get; set; }          // FK → VisitDetails (nullable)
     public string MedicationName { get; set; } = default!; // r1_1.2
@@ -18,6 +19,7 @@ public class MedicationDetail
     public DateOnly? StartDate { get; set; }
     public DateOnly? EndDate { get; set; }
 
+    public User User { get; set; } = default!;
     public HealthRecord HealthRecord { get; set; } = default!;
     public VisitDetail? VisitDetail { get; set; }
 }

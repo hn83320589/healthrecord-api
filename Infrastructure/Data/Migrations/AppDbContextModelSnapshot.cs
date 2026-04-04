@@ -48,7 +48,7 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                     b.Property<int>("Systolic")
                         .HasColumnType("int");
 
-                    b.Property<int?>("UserId")
+                    b.Property<int>("UserId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
@@ -194,7 +194,7 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                     b.Property<string>("Unit")
                         .HasColumnType("longtext");
 
-                    b.Property<int?>("UserId")
+                    b.Property<int>("UserId")
                         .HasColumnType("int");
 
                     b.Property<int?>("UserLabItemId")
@@ -269,7 +269,7 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                     b.Property<DateOnly?>("StartDate")
                         .HasColumnType("date");
 
-                    b.Property<int?>("UserId")
+                    b.Property<int>("UserId")
                         .HasColumnType("int");
 
                     b.Property<int?>("VisitDetailId")
@@ -345,6 +345,53 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                         .HasDatabaseName("uq_user_hash");
 
                     b.ToTable("NhiImportLogs");
+                });
+
+            modelBuilder.Entity("HealthRecord.API.Models.Entities.SymptomLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BodyLocation")
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int?>("DurationMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("LoggedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("Severity")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SymptomType")
+                        .IsRequired()
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<string>("Triggers")
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "LoggedAt")
+                        .HasDatabaseName("idx_symptom_user_date");
+
+                    b.HasIndex("UserId", "SymptomType")
+                        .HasDatabaseName("idx_symptom_user_type");
+
+                    b.ToTable("SymptomLogs");
                 });
 
             modelBuilder.Entity("HealthRecord.API.Models.Entities.User", b =>
@@ -521,6 +568,9 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                     b.Property<string>("NhiRawData")
                         .HasColumnType("longtext");
 
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
                     b.Property<string>("VisitType")
                         .HasColumnType("longtext");
 
@@ -531,6 +581,8 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
 
                     b.HasIndex("HealthRecordId")
                         .IsUnique();
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("VisitDetails");
                 });
@@ -543,11 +595,15 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("HealthRecord.API.Models.Entities.User", null)
+                    b.HasOne("HealthRecord.API.Models.Entities.User", "User")
                         .WithMany("BloodPressures")
-                        .HasForeignKey("UserId");
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("HealthRecord");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("HealthRecord.API.Models.Entities.EmergencyContact", b =>
@@ -587,9 +643,11 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("HealthRecord.API.Models.Entities.User", null)
+                    b.HasOne("HealthRecord.API.Models.Entities.User", "User")
                         .WithMany("LabResults")
-                        .HasForeignKey("UserId");
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("HealthRecord.API.Models.Entities.UserLabItem", "UserLabItem")
                         .WithMany("LabResults")
@@ -597,6 +655,8 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("HealthRecord");
+
+                    b.Navigation("User");
 
                     b.Navigation("UserLabItem");
                 });
@@ -609,9 +669,11 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("HealthRecord.API.Models.Entities.User", null)
+                    b.HasOne("HealthRecord.API.Models.Entities.User", "User")
                         .WithMany("Medications")
-                        .HasForeignKey("UserId");
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("HealthRecord.API.Models.Entities.VisitDetail", "VisitDetail")
                         .WithMany("Medications")
@@ -620,6 +682,8 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
 
                     b.Navigation("HealthRecord");
 
+                    b.Navigation("User");
+
                     b.Navigation("VisitDetail");
                 });
 
@@ -627,6 +691,17 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                 {
                     b.HasOne("HealthRecord.API.Models.Entities.User", "User")
                         .WithMany("NhiImportLogs")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("HealthRecord.API.Models.Entities.SymptomLog", b =>
+                {
+                    b.HasOne("HealthRecord.API.Models.Entities.User", "User")
+                        .WithMany("SymptomLogs")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -653,7 +728,15 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("HealthRecord.API.Models.Entities.User", "User")
+                        .WithMany("VisitDetails")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("HealthRecord");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("HealthRecord.API.Models.Entities.HealthRecord", b =>
@@ -686,7 +769,11 @@ namespace HealthRecord.API.Infrastructure.Data.Migrations
 
                     b.Navigation("NhiImportLogs");
 
+                    b.Navigation("SymptomLogs");
+
                     b.Navigation("UserLabItems");
+
+                    b.Navigation("VisitDetails");
                 });
 
             modelBuilder.Entity("HealthRecord.API.Models.Entities.UserLabItem", b =>

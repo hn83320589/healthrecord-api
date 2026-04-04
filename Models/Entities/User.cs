@@ -22,7 +22,9 @@ public class User
     public ICollection<HealthRecord> HealthRecords { get; set; } = [];
     public ICollection<BloodPressureDetail> BloodPressures { get; set; } = [];
     public ICollection<LabResultDetail> LabResults { get; set; } = [];
+    public ICollection<VisitDetail> VisitDetails { get; set; } = [];
     public ICollection<MedicationDetail> Medications { get; set; } = [];
     public ICollection<NhiImportLog> NhiImportLogs { get; set; } = [];
     public ICollection<UserLabItem> UserLabItems { get; set; } = [];
+    public ICollection<SymptomLog> SymptomLogs { get; set; } = [];
 }

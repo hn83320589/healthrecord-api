@@ -59,6 +59,7 @@ public class MedicationService(AppDbContext db) : IMedicationService
 
         var detail = new MedicationDetail
         {
+            UserId = userId,
             HealthRecordId = record.Id,
             MedicationName = request.MedicationName,
             GenericName = request.GenericName,

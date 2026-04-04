@@ -91,6 +91,7 @@ public class NhiImportService(AppDbContext db) : INhiImportService
 
                 var visitDetail = new VisitDetail
                 {
+                    UserId = userId,
                     HealthRecordId = record.Id,
                     VisitTypeCode = GetVisitTypeField(visit),
                     DiagnosisCode1 = visit.PrimaryIcdCode,
@@ -132,6 +133,7 @@ public class NhiImportService(AppDbContext db) : INhiImportService
 
                     db.MedicationDetails.Add(new MedicationDetail
                     {
+                        UserId = userId,
                         HealthRecordId = medRecord.Id,
                         VisitDetailId = visitDetail.Id,
                         MedicationName = med.DrugName,
@@ -225,6 +227,7 @@ public class NhiImportService(AppDbContext db) : INhiImportService
 
                     labDetails.Add(new LabResultDetail
                     {
+                        UserId = userId,
                         HealthRecordId = labRecord.Id,
                         UserLabItemId = userItem.Id,
                         ItemCode = itemCode,

@@ -19,7 +19,11 @@ public class LabService(AppDbContext db) : ILabService
             .Where(l => l.HealthRecord.UserId == userId);
 
         if (from.HasValue) query = query.Where(l => l.HealthRecord.RecordedAt >= from.Value);
-        if (to.HasValue) query = query.Where(l => l.HealthRecord.RecordedAt <= to.Value);
+        if (to.HasValue)
+        {
+            var end = to.Value.TimeOfDay == TimeSpan.Zero ? to.Value.AddDays(1) : to.Value;
+            query = query.Where(l => l.HealthRecord.RecordedAt < end);
+        }
         if (itemCode != null) query = query.Where(l => l.ItemCode == itemCode);
 
         var total = await query.CountAsync();
@@ -76,6 +80,7 @@ public class LabService(AppDbContext db) : ILabService
 
             var detail = new LabResultDetail
             {
+                UserId = userId,
                 HealthRecordId = record.Id,
                 UserLabItemId = userLabItem?.Id,
                 ItemCode = item.ItemCode,
@@ -157,7 +162,11 @@ public class LabService(AppDbContext db) : ILabService
             .Where(l => l.HealthRecord.UserId == userId);
 
         if (from.HasValue) query = query.Where(l => l.HealthRecord.RecordedAt >= from.Value);
-        if (to.HasValue) query = query.Where(l => l.HealthRecord.RecordedAt <= to.Value);
+        if (to.HasValue)
+        {
+            var end = to.Value.TimeOfDay == TimeSpan.Zero ? to.Value.AddDays(1) : to.Value;
+            query = query.Where(l => l.HealthRecord.RecordedAt < end);
+        }
 
         var records = await query
             .OrderByDescending(l => l.HealthRecord.RecordedAt)

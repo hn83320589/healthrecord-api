@@ -1,4 +1,5 @@
 using HealthRecord.API.Infrastructure.Data;
+using HealthRecord.API.Models.DTOs.Symptom;
 using HealthRecord.API.Models.DTOs.Visit;
 using HealthRecord.API.Models.Entities;
 using HealthRecord.API.Services.Interfaces;
@@ -29,6 +30,7 @@ public class VisitRelationService(AppDbContext db) : IVisitRelationService
 
         var labs = await GetRelatedLabsInternal(userId, visitDate, instCode);
         var bps = await GetBpAroundDateInternal(userId, visitDate, 3);
+        var symptoms = await GetSymptomsNearVisitInternal(userId, visitDate, 7);
 
         var visitInfo = MapVisitInfo(visit);
         var medications = visit.Medications.Select(MapMedication).ToList();
@@ -41,9 +43,10 @@ public class VisitRelationService(AppDbContext db) : IVisitRelationService
             MedicationCount: medications.Count,
             BpCount: bps.Count,
             BpAvgSystolic: bps.Count > 0 ? (int)Math.Round(bps.Average(b => b.Systolic)) : null,
-            BpAvgDiastolic: bps.Count > 0 ? (int)Math.Round(bps.Average(b => b.Diastolic)) : null);
+            BpAvgDiastolic: bps.Count > 0 ? (int)Math.Round(bps.Average(b => b.Diastolic)) : null,
+            SymptomCount: symptoms.Count);
 
-        return new VisitRelatedResponse(visitInfo, medications, labs, bps, summary);
+        return new VisitRelatedResponse(visitInfo, medications, labs, bps, symptoms, summary);
     }
 
     public async Task<List<VisitTimelineItemDto>> GetTimelineAsync(
@@ -55,7 +58,11 @@ public class VisitRelationService(AppDbContext db) : IVisitRelationService
             .Where(v => v.HealthRecord.UserId == userId && v.HealthRecord.RecordType == "visit");
 
         if (startDate.HasValue) query = query.Where(v => v.HealthRecord.RecordedAt >= startDate.Value);
-        if (endDate.HasValue) query = query.Where(v => v.HealthRecord.RecordedAt <= endDate.Value);
+        if (endDate.HasValue)
+        {
+            var end = endDate.Value.TimeOfDay == TimeSpan.Zero ? endDate.Value.AddDays(1) : endDate.Value;
+            query = query.Where(v => v.HealthRecord.RecordedAt < end);
+        }
 
         var visits = await query.OrderByDescending(v => v.HealthRecord.RecordedAt).ToListAsync();
 
@@ -118,6 +125,22 @@ public class VisitRelationService(AppDbContext db) : IVisitRelationService
     }
 
     // ── Internal helpers ─────────────────────────────────────────────
+
+    private async Task<List<SymptomNearVisitDto>> GetSymptomsNearVisitInternal(
+        int userId, DateTime visitDate, int dayRange)
+    {
+        var from = visitDate.Date.AddDays(-dayRange);
+        var to = visitDate.Date.AddDays(dayRange + 1);
+
+        var symptoms = await db.SymptomLogs
+            .Where(s => s.UserId == userId && s.LoggedAt >= from && s.LoggedAt < to)
+            .OrderBy(s => s.LoggedAt)
+            .ToListAsync();
+
+        return symptoms.Select(s => new SymptomNearVisitDto(
+            s.Id, s.LoggedAt, s.SymptomType, s.Severity, s.BodyLocation,
+            (s.LoggedAt.Date - visitDate.Date).Days)).ToList();
+    }
 
     private async Task<List<LabResultWithStatusDto>> GetRelatedLabsInternal(
         int userId, DateTime visitDate, string? institutionCode)

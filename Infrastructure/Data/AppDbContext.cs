@@ -15,6 +15,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<MedicationDetail> MedicationDetails => Set<MedicationDetail>();
     public DbSet<NhiImportLog> NhiImportLogs => Set<NhiImportLog>();
     public DbSet<UserLabItem> UserLabItems => Set<UserLabItem>();
+    public DbSet<SymptomLog> SymptomLogs => Set<SymptomLog>();
 
     protected override void OnModelCreating(ModelBuilder m)
     {
@@ -45,6 +46,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         // ── BloodPressureDetails (1:1 with HealthRecord) ────────────
         m.Entity<BloodPressureDetail>(e =>
         {
+            e.HasOne(b => b.User).WithMany(u => u.BloodPressures)
+                .HasForeignKey(b => b.UserId).OnDelete(DeleteBehavior.Cascade);
+
             e.HasOne(b => b.HealthRecord).WithOne(h => h.BloodPressureDetail)
                 .HasForeignKey<BloodPressureDetail>(b => b.HealthRecordId)
                 .OnDelete(DeleteBehavior.Cascade);
@@ -55,6 +59,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         // ── VisitDetails (1:1 with HealthRecord) ────────────────────
         m.Entity<VisitDetail>(e =>
         {
+            e.HasOne(v => v.User).WithMany(u => u.VisitDetails)
+                .HasForeignKey(v => v.UserId).OnDelete(DeleteBehavior.Cascade);
+
             e.HasOne(v => v.HealthRecord).WithOne(h => h.VisitDetail)
                 .HasForeignKey<VisitDetail>(v => v.HealthRecordId)
                 .OnDelete(DeleteBehavior.Cascade);
@@ -65,6 +72,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         // ── LabResultDetails (many:1 with HealthRecord) ─────────────
         m.Entity<LabResultDetail>(e =>
         {
+            e.HasOne(l => l.User).WithMany(u => u.LabResults)
+                .HasForeignKey(l => l.UserId).OnDelete(DeleteBehavior.Cascade);
+
             e.HasOne(l => l.HealthRecord).WithMany(h => h.LabResults)
                 .HasForeignKey(l => l.HealthRecordId)
                 .OnDelete(DeleteBehavior.Cascade);
@@ -80,6 +90,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         // ── MedicationDetails (many:1 with HealthRecord) ────────────
         m.Entity<MedicationDetail>(e =>
         {
+            e.HasOne(md => md.User).WithMany(u => u.Medications)
+                .HasForeignKey(md => md.UserId).OnDelete(DeleteBehavior.Cascade);
+
             e.HasOne(md => md.HealthRecord).WithMany(h => h.Medications)
                 .HasForeignKey(md => md.HealthRecordId)
                 .OnDelete(DeleteBehavior.Cascade);
@@ -109,6 +122,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
             e.HasIndex(i => new { i.UserId, i.ItemCode, i.ItemName })
                 .IsUnique().HasDatabaseName("uq_user_item");
+        });
+
+        // ── SymptomLogs ────────────────────────────────────────────
+        m.Entity<SymptomLog>(e =>
+        {
+            e.HasOne(s => s.User).WithMany(u => u.SymptomLogs)
+                .HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Cascade);
+
+            e.HasIndex(s => new { s.UserId, s.LoggedAt }).HasDatabaseName("idx_symptom_user_date");
+            e.HasIndex(s => new { s.UserId, s.SymptomType }).HasDatabaseName("idx_symptom_user_type");
         });
 
         // ── Global UTC converter ────────────────────────────────────

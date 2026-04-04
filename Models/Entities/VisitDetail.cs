@@ -3,6 +3,7 @@ namespace HealthRecord.API.Models.Entities;
 public class VisitDetail
 {
     public int Id { get; set; }
+    public int UserId { get; set; }
     public int HealthRecordId { get; set; }
     public string? VisitType { get; set; }
     public string? VisitTypeCode { get; set; }      // r1.1
@@ -22,6 +23,7 @@ public class VisitDetail
     public decimal? MedicalCost { get; set; }        // r1.13
     public string? NhiRawData { get; set; }          // full JSON for debug
 
+    public User User { get; set; } = default!;
     public HealthRecord HealthRecord { get; set; } = default!;
     public ICollection<MedicationDetail> Medications { get; set; } = [];
 }

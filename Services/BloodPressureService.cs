@@ -17,7 +17,11 @@ public class BloodPressureService(AppDbContext db) : IBloodPressureService
             .Include(b => b.HealthRecord)
             .Where(b => b.HealthRecord.UserId == userId);
         if (from.HasValue) query = query.Where(b => b.HealthRecord.RecordedAt >= from.Value);
-        if (to.HasValue) query = query.Where(b => b.HealthRecord.RecordedAt <= to.Value);
+        if (to.HasValue)
+        {
+            var end = to.Value.TimeOfDay == TimeSpan.Zero ? to.Value.AddDays(1) : to.Value;
+            query = query.Where(b => b.HealthRecord.RecordedAt < end);
+        }
 
         var total = await query.CountAsync();
         var items = await query
@@ -59,6 +63,7 @@ public class BloodPressureService(AppDbContext db) : IBloodPressureService
 
         var detail = new BloodPressureDetail
         {
+            UserId = userId,
             HealthRecordId = record.Id,
             Systolic = request.Systolic,
             Diastolic = request.Diastolic,
@@ -116,7 +121,11 @@ public class BloodPressureService(AppDbContext db) : IBloodPressureService
             .Include(b => b.HealthRecord)
             .Where(b => b.HealthRecord.UserId == userId);
         if (from.HasValue) query = query.Where(b => b.HealthRecord.RecordedAt >= from.Value);
-        if (to.HasValue) query = query.Where(b => b.HealthRecord.RecordedAt <= to.Value);
+        if (to.HasValue)
+        {
+            var end = to.Value.TimeOfDay == TimeSpan.Zero ? to.Value.AddDays(1) : to.Value;
+            query = query.Where(b => b.HealthRecord.RecordedAt < end);
+        }
 
         var records = await query.ToListAsync();
         if (records.Count == 0)

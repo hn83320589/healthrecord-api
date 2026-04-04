@@ -19,7 +19,11 @@ public class VisitService(AppDbContext db) : IVisitService
             .Where(v => v.HealthRecord.UserId == userId);
 
         if (from.HasValue) query = query.Where(v => v.HealthRecord.RecordedAt >= from.Value);
-        if (to.HasValue) query = query.Where(v => v.HealthRecord.RecordedAt <= to.Value);
+        if (to.HasValue)
+        {
+            var end = to.Value.TimeOfDay == TimeSpan.Zero ? to.Value.AddDays(1) : to.Value;
+            query = query.Where(v => v.HealthRecord.RecordedAt < end);
+        }
 
         var total = await query.CountAsync();
         var items = await query
@@ -66,6 +70,7 @@ public class VisitService(AppDbContext db) : IVisitService
 
         var detail = new VisitDetail
         {
+            UserId = userId,
             HealthRecordId = record.Id,
             Department = request.Department,
             DoctorName = request.DoctorName,

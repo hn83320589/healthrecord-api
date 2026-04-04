@@ -14,7 +14,11 @@ public class HealthRecordService(AppDbContext db) : IHealthRecordService
     {
         var query = db.HealthRecords.Where(h => h.UserId == userId);
         if (from.HasValue) query = query.Where(h => h.RecordedAt >= from.Value);
-        if (to.HasValue) query = query.Where(h => h.RecordedAt <= to.Value);
+        if (to.HasValue)
+        {
+            var end = to.Value.TimeOfDay == TimeSpan.Zero ? to.Value.AddDays(1) : to.Value;
+            query = query.Where(h => h.RecordedAt < end);
+        }
 
         var total = await query.CountAsync();
         var items = await query

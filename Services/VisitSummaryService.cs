@@ -177,7 +177,8 @@ public class VisitSummaryService(AppDbContext db) : IVisitSummaryService
                 Category = item?.Category ?? "其他",
                 Dto = new LabItemSummaryDto(
                     item?.DisplayName ?? l.ItemName,
-                    l.ValueNumeric, l.ValueText, l.Unit ?? item?.Unit, status)
+                    l.ValueNumeric.HasValue ? Math.Round(l.ValueNumeric.Value, 2) : null,
+                    l.ValueText, l.Unit ?? item?.Unit, status)
             };
         }).ToList();
 
@@ -214,7 +215,7 @@ public class VisitSummaryService(AppDbContext db) : IVisitSummaryService
                 .OrderBy(l => l.HealthRecord.RecordedAt)
                 .Select(l => new LabTrendPointDto(
                     DateOnly.FromDateTime(l.HealthRecord.RecordedAt),
-                    l.ValueNumeric!.Value))
+                    Math.Round(l.ValueNumeric!.Value, 2)))
                 .ToListAsync();
 
             if (points.Count < 2) continue;
@@ -523,7 +524,7 @@ public class VisitSummaryService(AppDbContext db) : IVisitSummaryService
                 {
                     table.Cell().Element(CellStyle).Text(item.DisplayName ?? "");
 
-                    var valueText = item.Value.HasValue ? item.Value.Value.ToString("G") : (item.ValueText ?? "");
+                    var valueText = item.Value.HasValue ? item.Value.Value.ToString("0.##") : (item.ValueText ?? "");
                     var isAbnormal = item.Status is "high" or "low";
 
                     table.Cell().Element(CellStyle).Text(text =>
@@ -568,7 +569,7 @@ public class VisitSummaryService(AppDbContext db) : IVisitSummaryService
                 inner.Item().Text(text =>
                 {
                     text.Span($"{trend.DisplayName}: ").Bold();
-                    var pointTexts = trend.Points.Select(p => p.Value.ToString("G"));
+                    var pointTexts = trend.Points.Select(p => p.Value.ToString("0.##"));
                     text.Span(string.Join(" \u2192 ", pointTexts));
                     text.Span($" {trend.TrendDirection}").Bold()
                         .FontColor(trend.TrendDirection == "\u2191" ? Colors.Red.Medium

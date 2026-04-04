@@ -1,3 +1,4 @@
+using System.Text.Json;
 using HealthRecord.API.Common.Constants;
 using HealthRecord.API.Models.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +14,9 @@ public static class DbSeeder
         await SeedUser(db, "htn@test.com", "林高壓（HTN）", "高血壓", new DateOnly(1965, 11, 20), SeedHtn);
         await SeedUser(db, "dm@test.com", "王糖友（DM）", "第二型糖尿病", new DateOnly(1970, 3, 8), SeedDm);
         await SeedUser(db, "healthy@test.com", "張健康", null, new DateOnly(1995, 8, 25), SeedHealthy);
+
+        // Seed reminders independently (idempotent)
+        await SeedRemindersIfMissing(db);
     }
 
     private static async Task SeedUser(AppDbContext db, string email, string name, string? chronic,
@@ -38,11 +42,10 @@ public static class DbSeeder
             await db.SaveChangesAsync();
         }
 
-        // Skip if seed data already complete (visits exist for accounts that should have them)
+        // Seed main data if not yet done
         var hrCount = await db.HealthRecords.CountAsync(h => h.UserId == user.Id);
-        if (hrCount > 10) return; // already seeded
-
-        await seedData(db, user.Id);
+        if (hrCount <= 10)
+            await seedData(db, user.Id);
     }
 
     // ── Batch helper: create HealthRecords first, then add details referencing them ──
@@ -402,6 +405,98 @@ public static class DbSeeder
             new() { UserId = userId, HealthRecordId = labRec.Id, ItemCode = "09005C", ItemName = "飯前血糖 Glucose", IsNumeric = true, ValueNumeric = 88m, Unit = "mg/dL" },
             new() { UserId = userId, HealthRecordId = labRec.Id, ItemCode = "09001C", ItemName = "總膽固醇", IsNumeric = true, ValueNumeric = 185m, Unit = "mg/dL" },
         ]);
+        await db.SaveChangesAsync();
+    }
+
+    // ─── Medication Reminders + Logs (independent seed) ─────────
+
+    private static async Task SeedRemindersIfMissing(AppDbContext db)
+    {
+        var now = DateTime.UtcNow;
+
+        // SLE reminders
+        var sleUser = await db.Users.FirstOrDefaultAsync(u => u.Email == "sle@test.com");
+        if (sleUser != null && !await db.MedicationReminders.AnyAsync(r => r.UserId == sleUser.Id))
+        {
+            var reminders = new List<MedicationReminder>
+            {
+                new() { UserId = sleUser.Id, MedicationName = "普賴鬆5mg", Dosage = "5mg", Frequency = "QD",
+                    RemindTimes = JsonSerializer.Serialize(new[] { "08:00" }),
+                    DaysOfWeek = "MON,TUE,WED,THU,FRI,SAT,SUN",
+                    StartDate = DateOnly.FromDateTime(now.AddMonths(-3)),
+                    IsEnabled = true, CreatedAt = now, UpdatedAt = now },
+                new() { UserId = sleUser.Id, MedicationName = "黴芬諾酸酯500mg", Dosage = "500mg", Frequency = "BID",
+                    RemindTimes = JsonSerializer.Serialize(new[] { "08:00", "20:00" }),
+                    DaysOfWeek = "MON,TUE,WED,THU,FRI,SAT,SUN",
+                    StartDate = DateOnly.FromDateTime(now.AddMonths(-3)),
+                    IsEnabled = true, CreatedAt = now, UpdatedAt = now },
+                new() { UserId = sleUser.Id, MedicationName = "羥氯奎寧錠200mg", Dosage = "200mg", Frequency = "BID",
+                    RemindTimes = JsonSerializer.Serialize(new[] { "08:00", "20:00" }),
+                    DaysOfWeek = "MON,TUE,WED,THU,FRI,SAT,SUN",
+                    StartDate = DateOnly.FromDateTime(now.AddMonths(-3)),
+                    IsEnabled = true, CreatedAt = now, UpdatedAt = now },
+            };
+            db.MedicationReminders.AddRange(reminders);
+            await db.SaveChangesAsync();
+
+            await SeedLogs(db, sleUser.Id, reminders, 14, new Random(101));
+        }
+
+        // HTN reminder
+        var htnUser = await db.Users.FirstOrDefaultAsync(u => u.Email == "htn@test.com");
+        if (htnUser != null && !await db.MedicationReminders.AnyAsync(r => r.UserId == htnUser.Id))
+        {
+            var reminder = new MedicationReminder
+            {
+                UserId = htnUser.Id, MedicationName = "脈優錠5mg", Dosage = "5mg", Frequency = "QD",
+                RemindTimes = JsonSerializer.Serialize(new[] { "08:00" }),
+                DaysOfWeek = "MON,TUE,WED,THU,FRI,SAT,SUN",
+                StartDate = DateOnly.FromDateTime(now.AddMonths(-1)),
+                IsEnabled = true, CreatedAt = now, UpdatedAt = now
+            };
+            db.MedicationReminders.Add(reminder);
+            await db.SaveChangesAsync();
+
+            await SeedLogs(db, htnUser.Id, [reminder], 7, new Random(102));
+        }
+    }
+
+    private static async Task SeedLogs(AppDbContext db, int userId,
+        List<MedicationReminder> reminders, int days, Random rng)
+    {
+        var now = DateTime.UtcNow;
+        var logs = new List<MedicationLog>();
+
+        for (int d = days - 1; d >= 0; d--)
+        {
+            var day = now.AddDays(-d).Date;
+            foreach (var reminder in reminders)
+            {
+                var times = JsonSerializer.Deserialize<List<string>>(reminder.RemindTimes) ?? [];
+                foreach (var timeStr in times)
+                {
+                    if (!TimeOnly.TryParse(timeStr, out var timeOnly)) continue;
+                    var scheduledAt = day.Add(timeOnly.ToTimeSpan());
+
+                    var roll = rng.Next(100);
+                    string status;
+                    DateTime? takenAt = null;
+                    if (roll < 85) { status = "taken"; takenAt = scheduledAt.AddMinutes(rng.Next(0, 30)); }
+                    else if (roll < 92) { status = "late"; takenAt = scheduledAt.AddMinutes(60 + rng.Next(0, 60)); }
+                    else if (roll < 97) { status = "skipped"; }
+                    else { status = "missed"; }
+
+                    logs.Add(new MedicationLog
+                    {
+                        UserId = userId, ReminderId = reminder.Id,
+                        MedicationName = reminder.MedicationName, Dosage = reminder.Dosage,
+                        ScheduledAt = scheduledAt, TakenAt = takenAt, Status = status,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
+        }
+        db.MedicationLogs.AddRange(logs);
         await db.SaveChangesAsync();
     }
 }

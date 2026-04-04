@@ -16,6 +16,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<NhiImportLog> NhiImportLogs => Set<NhiImportLog>();
     public DbSet<UserLabItem> UserLabItems => Set<UserLabItem>();
     public DbSet<SymptomLog> SymptomLogs => Set<SymptomLog>();
+    public DbSet<MedicationReminder> MedicationReminders => Set<MedicationReminder>();
+    public DbSet<MedicationLog> MedicationLogs => Set<MedicationLog>();
 
     protected override void OnModelCreating(ModelBuilder m)
     {
@@ -132,6 +134,34 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
             e.HasIndex(s => new { s.UserId, s.LoggedAt }).HasDatabaseName("idx_symptom_user_date");
             e.HasIndex(s => new { s.UserId, s.SymptomType }).HasDatabaseName("idx_symptom_user_type");
+        });
+
+        // ── MedicationReminders ─────────────────────────────────────
+        m.Entity<MedicationReminder>(e =>
+        {
+            e.HasOne(r => r.User).WithMany(u => u.MedicationReminders)
+                .HasForeignKey(r => r.UserId).OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(r => r.MedicationDetail).WithMany()
+                .HasForeignKey(r => r.MedicationDetailId)
+                .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+
+            e.HasIndex(r => new { r.UserId, r.IsEnabled }).HasDatabaseName("idx_reminder_user_enabled");
+        });
+
+        // ── MedicationLogs ──────────────────────────────────────────
+        m.Entity<MedicationLog>(e =>
+        {
+            e.HasOne(l => l.User).WithMany(u => u.MedicationLogs)
+                .HasForeignKey(l => l.UserId).OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(l => l.Reminder).WithMany(r => r.Logs)
+                .HasForeignKey(l => l.ReminderId)
+                .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+
+            e.HasIndex(l => new { l.UserId, l.ScheduledAt }).HasDatabaseName("idx_log_user_date");
+            e.HasIndex(l => new { l.ReminderId, l.ScheduledAt }).HasDatabaseName("idx_log_reminder");
+            e.HasIndex(l => new { l.UserId, l.Status, l.ScheduledAt }).HasDatabaseName("idx_log_status");
         });
 
         // ── Global UTC converter ────────────────────────────────────

@@ -31,6 +31,7 @@ public class VisitRelationService(AppDbContext db) : IVisitRelationService
         var labs = await GetRelatedLabsInternal(userId, visitDate, instCode);
         var bps = await GetBpAroundDateInternal(userId, visitDate, 3);
         var symptoms = await GetSymptomsNearVisitInternal(userId, visitDate, 7);
+        var activeReminders = await GetActiveRemindersInternal(userId, visitDate);
 
         var visitInfo = MapVisitInfo(visit);
         var medications = visit.Medications.Select(MapMedication).ToList();
@@ -44,9 +45,10 @@ public class VisitRelationService(AppDbContext db) : IVisitRelationService
             BpCount: bps.Count,
             BpAvgSystolic: bps.Count > 0 ? (int)Math.Round(bps.Average(b => b.Systolic)) : null,
             BpAvgDiastolic: bps.Count > 0 ? (int)Math.Round(bps.Average(b => b.Diastolic)) : null,
-            SymptomCount: symptoms.Count);
+            SymptomCount: symptoms.Count,
+            ActiveReminderCount: activeReminders.Count);
 
-        return new VisitRelatedResponse(visitInfo, medications, labs, bps, symptoms, summary);
+        return new VisitRelatedResponse(visitInfo, medications, labs, bps, symptoms, activeReminders, summary);
     }
 
     public async Task<List<VisitTimelineItemDto>> GetTimelineAsync(
@@ -125,6 +127,21 @@ public class VisitRelationService(AppDbContext db) : IVisitRelationService
     }
 
     // ── Internal helpers ─────────────────────────────────────────────
+
+    private async Task<List<ActiveReminderDto>> GetActiveRemindersInternal(int userId, DateTime visitDate)
+    {
+        var visitDateOnly = DateOnly.FromDateTime(visitDate);
+
+        var reminders = await db.MedicationReminders
+            .Where(r => r.UserId == userId && r.IsEnabled)
+            .ToListAsync();
+
+        return reminders
+            .Where(r => (r.StartDate == null || r.StartDate <= visitDateOnly)
+                     && (r.EndDate == null || r.EndDate >= visitDateOnly))
+            .Select(r => new ActiveReminderDto(r.Id, r.MedicationName, r.Dosage, r.Frequency))
+            .ToList();
+    }
 
     private async Task<List<SymptomNearVisitDto>> GetSymptomsNearVisitInternal(
         int userId, DateTime visitDate, int dayRange)

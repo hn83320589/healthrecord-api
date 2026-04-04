@@ -85,6 +85,8 @@ try
     builder.Services.AddScoped<IVisitService, VisitService>();
     builder.Services.AddScoped<IVisitRelationService, VisitRelationService>();
     builder.Services.AddScoped<ISymptomService, SymptomService>();
+    builder.Services.AddScoped<IMedicationReminderService, MedicationReminderService>();
+    builder.Services.AddScoped<IMedicationLogService, MedicationLogService>();
 
     // Swagger (dev only)
     builder.Services.AddEndpointsApiExplorer();

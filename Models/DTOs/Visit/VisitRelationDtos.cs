@@ -10,6 +10,7 @@ public record VisitRelatedResponse(
     List<LabResultWithStatusDto> LabResults,
     List<BloodPressureWithDateDto> BloodPressures,
     List<SymptomNearVisitDto> Symptoms,
+    List<ActiveReminderDto> ActiveReminders,
     VisitSummaryDto Summary);
 
 public record VisitInfoDto(
@@ -66,7 +67,8 @@ public record VisitSummaryDto(
     int BpCount,
     int? BpAvgSystolic,
     int? BpAvgDiastolic,
-    int SymptomCount);
+    int SymptomCount,
+    int ActiveReminderCount);
 
 // ── GET /visits/timeline ──────────────────────────────────────
 
@@ -84,3 +86,7 @@ public record VisitTimelineItemDto(
 public record BloodPressureSimpleDto(int Systolic, int Diastolic, int? Pulse);
 
 public record KeyLabDto(string? DisplayName, decimal? Value, string? Unit, string Status);
+
+// ── Active Reminders ─────────────────────────────────────────
+
+public record ActiveReminderDto(int Id, string MedicationName, string? Dosage, string? Frequency);

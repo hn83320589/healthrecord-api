@@ -27,4 +27,6 @@ public class User
     public ICollection<NhiImportLog> NhiImportLogs { get; set; } = [];
     public ICollection<UserLabItem> UserLabItems { get; set; } = [];
     public ICollection<SymptomLog> SymptomLogs { get; set; } = [];
+    public ICollection<MedicationReminder> MedicationReminders { get; set; } = [];
+    public ICollection<MedicationLog> MedicationLogs { get; set; } = [];
 }

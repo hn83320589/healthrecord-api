@@ -26,3 +26,7 @@ logs/
 ## Temp / Published output
 publish/
 out/
+
+## Visual Studio files
+*.sln
+

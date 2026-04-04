@@ -1,5 +1,6 @@
 using HealthRecord.API.Models.DTOs.Common;
 using HealthRecord.API.Models.DTOs.Lab;
+using HealthRecord.API.Models.DTOs.Visit;
 using HealthRecord.API.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,7 +9,7 @@ namespace HealthRecord.API.Controllers;
 
 [Authorize]
 [Route("lab-results")]
-public class LabController(ILabService service) : BaseController
+public class LabController(ILabService service, IVisitRelationService relation) : BaseController
 {
     [HttpGet]
     public async Task<ActionResult<ApiResponse<PagedResult<LabResultResponse>>>> GetList(
@@ -38,6 +39,13 @@ public class LabController(ILabService service) : BaseController
     {
         var result = await service.GetTrendAsync(CurrentUserId, itemCode, itemName);
         return Ok(ApiResponse<List<LabTrendPoint>>.Ok(result));
+    }
+
+    [HttpGet("by-visit/{visitId}")]
+    public async Task<ActionResult<ApiResponse<List<LabResultWithStatusDto>>>> GetByVisit(int visitId)
+    {
+        var result = await relation.GetLabsByVisitAsync(CurrentUserId, visitId);
+        return Ok(ApiResponse<List<LabResultWithStatusDto>>.Ok(result));
     }
 
     [HttpGet("{id}")]

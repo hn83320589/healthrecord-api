@@ -1,5 +1,6 @@
 using HealthRecord.API.Models.DTOs.BloodPressure;
 using HealthRecord.API.Models.DTOs.Common;
+using HealthRecord.API.Models.DTOs.Visit;
 using HealthRecord.API.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,7 +9,7 @@ namespace HealthRecord.API.Controllers;
 
 [Authorize]
 [Route("blood-pressure")]
-public class BloodPressureController(IBloodPressureService service) : BaseController
+public class BloodPressureController(IBloodPressureService service, IVisitRelationService relation) : BaseController
 {
     [HttpGet]
     public async Task<ActionResult<ApiResponse<PagedResult<BloodPressureResponse>>>> GetList(
@@ -36,6 +37,15 @@ public class BloodPressureController(IBloodPressureService service) : BaseContro
     {
         var result = await service.GetChartDataAsync(CurrentUserId, period);
         return Ok(ApiResponse<List<BloodPressureChartPoint>>.Ok(result));
+    }
+
+    [HttpGet("around-date")]
+    public async Task<ActionResult<ApiResponse<List<BloodPressureWithDateDto>>>> GetAroundDate(
+        [FromQuery] DateTime date,
+        [FromQuery] int days = 3)
+    {
+        var result = await relation.GetBpAroundDateAsync(CurrentUserId, date, days);
+        return Ok(ApiResponse<List<BloodPressureWithDateDto>>.Ok(result));
     }
 
     [HttpGet("{id}")]

@@ -8,7 +8,7 @@ namespace HealthRecord.API.Controllers;
 
 [Authorize]
 [Route("visits")]
-public class VisitController(IVisitService service) : BaseController
+public class VisitController(IVisitService service, IVisitRelationService relation) : BaseController
 {
     [HttpGet]
     public async Task<ActionResult<ApiResponse<PagedResult<VisitResponse>>>> GetList(
@@ -44,5 +44,21 @@ public class VisitController(IVisitService service) : BaseController
     {
         await service.DeleteAsync(CurrentUserId, id);
         return Ok(ApiResponse<object>.Ok(null!, "Deleted."));
+    }
+
+    [HttpGet("{id}/related")]
+    public async Task<ActionResult<ApiResponse<VisitRelatedResponse>>> GetRelated(int id)
+    {
+        var result = await relation.GetVisitRelatedAsync(CurrentUserId, id);
+        return Ok(ApiResponse<VisitRelatedResponse>.Ok(result));
+    }
+
+    [HttpGet("timeline")]
+    public async Task<ActionResult<ApiResponse<List<VisitTimelineItemDto>>>> GetTimeline(
+        [FromQuery] DateTime? startDate = null,
+        [FromQuery] DateTime? endDate = null)
+    {
+        var result = await relation.GetTimelineAsync(CurrentUserId, startDate, endDate);
+        return Ok(ApiResponse<List<VisitTimelineItemDto>>.Ok(result));
     }
 }

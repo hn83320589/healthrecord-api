@@ -99,7 +99,8 @@ public static class DbSeeder
             var rec = new HealthRecordEntity
             {
                 UserId = userId, RecordType = "lab_result", RecordedAt = at,
-                Source = "manual", NhiInstitution = "高雄榮總", CreatedAt = at, UpdatedAt = at
+                Source = "manual", NhiInstitution = "高雄榮總", NhiInstitutionCode = "0602030026",
+                CreatedAt = at, UpdatedAt = at
             };
             db.HealthRecords.Add(rec);
             await db.SaveChangesAsync();

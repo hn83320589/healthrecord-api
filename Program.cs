@@ -83,6 +83,7 @@ try
     builder.Services.AddScoped<INhiImportService, NhiImportService>();
     builder.Services.AddScoped<IUserLabItemService, UserLabItemService>();
     builder.Services.AddScoped<IVisitService, VisitService>();
+    builder.Services.AddScoped<IVisitRelationService, VisitRelationService>();
 
     // Swagger (dev only)
     builder.Services.AddEndpointsApiExplorer();

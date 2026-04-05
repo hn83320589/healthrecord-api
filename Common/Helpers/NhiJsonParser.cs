@@ -52,9 +52,9 @@ public static class NhiJsonParser
         var rowsByKey = new Dictionary<string, (JsonElement firstRow, List<JsonElement> allRows)>();
         foreach (var row in r1)
         {
-            var date = GetField(row, "5") ?? "";
-            var code = GetField(row, "3") ?? "";
-            var seq  = GetField(row, "7") ?? "";
+            var date = GetField(row, "5", "r1") ?? "";
+            var code = GetField(row, "3", "r1") ?? "";
+            var seq  = GetField(row, "7", "r1") ?? "";
             var key  = $"{date}|{code}|{seq}";
 
             if (!rowsByKey.ContainsKey(key))
@@ -65,15 +65,15 @@ public static class NhiJsonParser
 
         foreach (var (_, (firstRow, allRows)) in rowsByKey)
         {
-            if (!TryParseDate(GetField(firstRow, "5"), out var visitDate)) continue;
+            if (!TryParseDate(GetField(firstRow, "5", "r1"), out var visitDate)) continue;
 
             // Collect secondary diagnoses from all rows (fields 10–27 per row)
             var secondary = new List<object>();
             foreach (var row in allRows)
                 for (int i = 10; i <= 27; i += 2)
                 {
-                    var icdCode = GetField(row, i.ToString());
-                    var icdName = GetField(row, (i + 1).ToString());
+                    var icdCode = GetField(row, i.ToString(), "r1");
+                    var icdName = GetField(row, (i + 1).ToString(), "r1");
                     if (!string.IsNullOrWhiteSpace(icdCode))
                         secondary.Add(new { code = icdCode, name = icdName ?? "" });
                 }
@@ -87,14 +87,14 @@ public static class NhiJsonParser
 
             groups.Add(new NhiVisitGroup(
                 visitDate,
-                InstitutionCode:      GetField(firstRow, "3"),
-                InstitutionName:      GetField(firstRow, "4"),
-                VisitSeq:             GetField(firstRow, "7"),
-                PrimaryIcdCode:       GetField(firstRow, "8"),
-                PrimaryDiagnosis:     GetField(firstRow, "9"),
+                InstitutionCode:      GetField(firstRow, "3", "r1"),
+                InstitutionName:      GetField(firstRow, "4", "r1"),
+                VisitSeq:             GetField(firstRow, "7", "r1"),
+                PrimaryIcdCode:       GetField(firstRow, "8", "r1"),
+                PrimaryDiagnosis:     GetField(firstRow, "9", "r1"),
                 SecondaryDiagnosesJson: secondaryJson,
-                Copay:       ParseInt(GetField(firstRow, "12")),
-                TotalPoints: ParseInt(GetField(firstRow, "13")),
+                Copay:       ParseInt(GetField(firstRow, "12", "r1")),
+                TotalPoints: ParseInt(GetField(firstRow, "13", "r1")),
                 MedicationItems: meds));
         }
 
@@ -111,10 +111,10 @@ public static class NhiJsonParser
         foreach (var med in r1_1.EnumerateArray())
         {
             result.Add(new NhiMedItem(
-                Code:     GetField(med, "1"),
-                DrugName: GetField(med, "2") ?? GetField(med, "3") ?? "Unknown",
-                Quantity: ParseDecimal(GetField(med, "3")),
-                Days:     ParseInt(GetField(med, "4"))));
+                Code:     GetField(med, "1", "r1_1"),
+                DrugName: GetField(med, "2", "r1_1") ?? GetField(med, "3", "r1_1") ?? "Unknown",
+                Quantity: ParseDecimal(GetField(med, "3", "r1_1")),
+                Days:     ParseInt(GetField(med, "4", "r1_1"))));
         }
         return result;
     }
@@ -129,23 +129,23 @@ public static class NhiJsonParser
 
         foreach (var row in r7)
         {
-            if (!TryParseDate(GetField(row, "5"), out var visitDate)) continue;
+            if (!TryParseDate(GetField(row, "5", "r7"), out var visitDate)) continue;
 
-            var instCode = GetField(row, "3");
+            var instCode = GetField(row, "3", "r7");
             var key = $"{visitDate:yyyyMMdd}|{instCode}";
 
             if (!byKey.ContainsKey(key))
                 byKey[key] = new NhiLabGroup(visitDate, instCode, []);
 
-            var rawValue = GetField(row, "11");
+            var rawValue = GetField(row, "11", "r7");
             var isNumeric = IsNumericValue(rawValue);
             decimal? numericValue = isNumeric && decimal.TryParse(rawValue?.Trim(), out var n) ? n : null;
 
             byKey[key].Items.Add(new NhiLabItem(
-                NhiCode:     GetField(row, "8"),
-                NhiItemName: GetField(row, "10"),
+                NhiCode:     GetField(row, "8", "r7"),
+                NhiItemName: GetField(row, "10", "r7"),
                 RawValue:    rawValue,
-                RawRange:    GetField(row, "12"),
+                RawRange:    GetField(row, "12", "r7"),
                 IsNumeric:   isNumeric,
                 NumericValue: numericValue));
         }
@@ -201,10 +201,14 @@ public static class NhiJsonParser
         return cur.ValueKind == JsonValueKind.String ? cur.GetString() : cur.ToString();
     }
 
-    private static string? GetField(JsonElement item, string key)
+    private static string? GetField(JsonElement item, string key, string? prefix = null)
     {
-        if (!item.TryGetProperty(key, out var val)) return null;
-        return val.ValueKind == JsonValueKind.String ? val.GetString() : val.ToString();
+        // Try short key first ("5"), then prefixed key ("r1.5")
+        if (item.TryGetProperty(key, out var val))
+            return val.ValueKind == JsonValueKind.String ? val.GetString() : val.ToString();
+        if (prefix != null && item.TryGetProperty($"{prefix}.{key}", out val))
+            return val.ValueKind == JsonValueKind.String ? val.GetString() : val.ToString();
+        return null;
     }
 
     private static bool TryParseDate(string? value, out DateTime result)

@@ -320,7 +320,7 @@ public class VisitSummaryService(AppDbContext db) : IVisitSummaryService
             {
                 page.Size(PageSizes.A4);
                 page.Margin(1.5f, Unit.Centimetre);
-                page.DefaultTextStyle(x => x.FontSize(10));
+                page.DefaultTextStyle(x => x.FontSize(10).FontFamily("Noto Sans CJK TC", "Noto Sans TC", "Microsoft JhengHei", "PingFang TC"));
 
                 // Header
                 page.Header().Column(col =>
